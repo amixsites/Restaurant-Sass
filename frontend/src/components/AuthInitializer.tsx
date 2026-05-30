@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { useTenantStore } from '@/store/tenantStore';
+import { useImpersonationStore } from '@/store/impersonationStore';
 import { Loader2 } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
@@ -9,6 +10,7 @@ import { toast } from '@/hooks/use-toast';
 export const AuthInitializer = ({ children }: { children: React.ReactNode }) => {
   const { isInitialized, setAuth, resetAuth } = useAuthStore();
   const { setTenant, clearTenant } = useTenantStore();
+  const { restoreFromSession, endImpersonation } = useImpersonationStore();
 
   useEffect(() => {
     const fetchProfileAndSetAuth = async (session: Session | null) => {
@@ -77,6 +79,22 @@ export const AuthInitializer = ({ children }: { children: React.ReactNode }) => 
           isSubscriptionExpired: isSubExpired,
         });
 
+        // If SUPER_ADMIN, try to restore impersonation state from sessionStorage
+        if (profile.role === 'SUPER_ADMIN') {
+          const restored = restoreFromSession();
+          if (restored) {
+            // Override auth/tenant with impersonated context
+            setTenant(restored.restaurantId, restored.restaurantName);
+            setAuth({
+              session,
+              user: session.user,
+              role: profile.role,
+              restaurantId: restored.restaurantId,
+              isSubscriptionExpired: false,
+            });
+          }
+        }
+
       } catch (err) {
         console.error('Unexpected error fetching auth state:', err);
         resetAuth();
@@ -96,6 +114,7 @@ export const AuthInitializer = ({ children }: { children: React.ReactNode }) => 
       } else if (_event === 'SIGNED_OUT') {
         resetAuth();
         clearTenant();
+        endImpersonation(); // Clear impersonation on sign out
       }
     });
 

@@ -5,6 +5,7 @@ import { Search, ArrowLeft, ShoppingBag, Plus, Minus, LayoutGrid, List, User, Ph
 import { MobileShell } from '@/components/MobileShell';
 import { useCustomerMenu } from '@/hooks/api/useCustomerMenu';
 import { useCartStore } from '@/store/cartStore';
+import { getApiUrl } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
 // Veg/Non-veg dot indicator
@@ -130,7 +131,7 @@ export const CustomerMenu = () => {
         setIsSessionLoading(true);
         setSessionError(null);
         try {
-          const res = await fetch(`/api/session/${activeSessionId}`);
+          const res = await fetch(getApiUrl(`/api/session/${activeSessionId}`));
           if (res.ok) {
             const sess = await res.json();
             setRestaurantId(sess.restaurant_id);

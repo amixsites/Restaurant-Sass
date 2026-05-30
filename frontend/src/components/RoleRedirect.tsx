@@ -1,8 +1,10 @@
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import { useImpersonationStore } from '@/store/impersonationStore';
 
 export const RoleRedirect = () => {
   const { user, role } = useAuthStore();
+  const { isImpersonating } = useImpersonationStore();
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -11,6 +13,10 @@ export const RoleRedirect = () => {
   // Map roles to their specific dashboards
   switch (role) {
     case 'SUPER_ADMIN':
+      // If impersonating, go to admin dashboard
+      if (isImpersonating) {
+        return <Navigate to="/admin" replace />;
+      }
       return <Navigate to="/super-admin" replace />;
     case 'RESTAURANT_ADMIN':
     case 'MANAGER': // MANAGER shares the admin dashboard
@@ -28,3 +34,4 @@ export const RoleRedirect = () => {
       return <Navigate to="/unauthorized" replace />;
   }
 };
+

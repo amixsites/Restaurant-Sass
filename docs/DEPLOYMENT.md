@@ -185,6 +185,9 @@ VALUES (
 |---|---|---|
 | `VITE_SUPABASE_URL` | Yes | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Yes | Supabase anon (public) key |
+| `FRONTEND_URL` | Yes | Frontend URL allowed by backend CORS and redirect flow |
+| `SECRET_KEY` | Recommended | Backend secret for signing/authentication in production |
+| `QR_BASE_URL` | No | Backend URL used for QR landing links |
 | `VITE_WHATSAPP_PHONE_NUMBER_ID` | No | Meta WhatsApp Cloud API phone number ID |
 | `VITE_WHATSAPP_ACCESS_TOKEN` | No | Meta WhatsApp Cloud API access token |
 

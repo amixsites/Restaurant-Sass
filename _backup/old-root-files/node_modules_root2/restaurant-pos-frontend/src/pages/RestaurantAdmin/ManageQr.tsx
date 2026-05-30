@@ -19,6 +19,7 @@ import {
   Table as TableIcon
 } from 'lucide-react';
 import { logger } from '@/lib/logger';
+import { getApiUrl } from '@/lib/api';
 
 const ManageQr = () => {
   const { data: tables = [], isLoading } = useTables();
@@ -65,7 +66,7 @@ const ManageQr = () => {
     setTableLoading(tableId, true);
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch(`/api/tables/${tableId}/generate-qr`, {
+      const res = await fetch(getApiUrl(`/api/tables/${tableId}/generate-qr`), {
         method: 'POST',
         headers
       });
@@ -97,7 +98,7 @@ const ManageQr = () => {
     setTableLoading(tableId, true);
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch(`/api/tables/${tableId}/regenerate-qr`, {
+      const res = await fetch(getApiUrl(`/api/tables/${tableId}/regenerate-qr`), {
         method: 'POST',
         headers
       });
@@ -123,12 +124,12 @@ const ManageQr = () => {
   };
 
   const handleDownloadPNG = (tableId: string) => {
-    window.open(`/api/tables/${tableId}/qr-code-image`, '_blank');
+    window.open(getApiUrl(`/api/tables/${tableId}/qr-code-image`), '_blank');
   };
 
   const handleDownloadPDF = (tableId: string, tableNumber: string) => {
     const link = document.createElement('a');
-    link.href = `/api/tables/${tableId}/qr-code-pdf`;
+    link.href = getApiUrl(`/api/tables/${tableId}/qr-code-pdf`);
     link.download = `table_${tableNumber}_qr.pdf`;
     document.body.appendChild(link);
     link.click();
@@ -239,7 +240,7 @@ const ManageQr = () => {
                     {/* Large QR Preview */}
                     <div className="relative size-44 bg-white rounded-2xl border p-3 flex justify-center items-center shadow-sm print:size-48 print:border-zinc-300">
                       <img
-                        src={`/api/tables/${tableId}/qr-code-image?t=${refreshKey}`}
+                        src={getApiUrl(`/api/tables/${tableId}/qr-code-image?t=${refreshKey}`)}
                         alt={`QR code for table ${table.table_number}`}
                         className="w-full h-full object-contain"
                       />

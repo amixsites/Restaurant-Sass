@@ -1,19 +1,18 @@
 import { Link, useLocation } from "react-router-dom";
-import { Plus, X, LayoutDashboard, PlusCircle, Flame } from "lucide-react";
-import { mobileNavItems, navItems } from "./nav-items";
+import { Plus, X } from "lucide-react";
+import { mobileNavItems, navItems, superAdminNavItems, mobileSuperAdminNavItems } from "./nav-items";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/authStore";
+import { useImpersonationStore } from "@/store/impersonationStore";
 
 export function MobileBottomNav() {
   const { pathname } = useLocation();
   const { role } = useAuthStore();
+  const { isImpersonating } = useImpersonationStore();
 
-  const activeMobileNavItems = role === 'SUPER_ADMIN'
-    ? [
-        { to: "/super-admin", label: "Dashboard", icon: LayoutDashboard },
-        { to: "/super-admin/create", label: "Create", icon: PlusCircle },
-        { to: "/super-admin/simulation", label: "Simulator", icon: Flame }
-      ]
+  // When impersonating, show restaurant admin nav items
+  const activeMobileNavItems = (role === 'SUPER_ADMIN' && !isImpersonating)
+    ? mobileSuperAdminNavItems
     : mobileNavItems;
 
   return (
@@ -43,7 +42,8 @@ export function MobileBottomNav() {
           );
         })}
       </nav>
-      {role !== 'SUPER_ADMIN' && (
+      {/* Show FAB for restaurant admin views (including impersonation) */}
+      {(role !== 'SUPER_ADMIN' || isImpersonating) && (
         <Link
           to="/admin/take-order"
           className="md:hidden fixed bottom-24 right-4 z-40 size-14 rounded-2xl gradient-primary text-white grid place-items-center shadow-glow active:scale-95 transition"
@@ -58,13 +58,11 @@ export function MobileBottomNav() {
 export function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { pathname } = useLocation();
   const { role } = useAuthStore();
+  const { isImpersonating, impersonatedRestaurantName } = useImpersonationStore();
 
-  const activeNavItems = role === 'SUPER_ADMIN'
-    ? [
-        { to: "/super-admin", label: "Super Admin Dashboard", icon: LayoutDashboard },
-        { to: "/super-admin/create", label: "Create Restaurant", icon: PlusCircle },
-        { to: "/super-admin/simulation", label: "Testing Simulator", icon: Flame }
-      ]
+  // When impersonating, show restaurant admin nav items
+  const activeNavItems = (role === 'SUPER_ADMIN' && !isImpersonating)
+    ? superAdminNavItems
     : navItems;
 
   return (
@@ -88,7 +86,16 @@ export function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => 
         )}
       >
         <div className="flex items-center justify-between mb-6">
-          <div className="font-semibold text-foreground">{role === 'SUPER_ADMIN' ? 'SaaS Portal' : 'DineSwift'}</div>
+          <div>
+            <div className="font-semibold text-foreground">
+              {isImpersonating
+                ? impersonatedRestaurantName
+                : (role === 'SUPER_ADMIN' ? 'SaaS Portal' : 'DineSwift')}
+            </div>
+            {isImpersonating && (
+              <div className="text-[10px] font-semibold text-amber-500">Impersonation Mode</div>
+            )}
+          </div>
           <button onClick={onClose} className="size-8 grid place-items-center rounded-lg hover:bg-accent text-foreground">
             <X className="size-4" />
           </button>

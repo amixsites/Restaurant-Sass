@@ -125,6 +125,9 @@ See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the full guide.
 |---|---|---|
 | `VITE_SUPABASE_URL` | ✅ | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | ✅ | Supabase anon key |
+| `FRONTEND_URL` | ✅ | Allowlisted frontend origin for CORS / redirects |
+| `SECRET_KEY` | ✅ in production | Backend secret for signing tokens and secure operations |
+| `QR_BASE_URL` | ❌ | Backend URL used to generate QR landing links |
 | `VITE_WHATSAPP_PHONE_NUMBER_ID` | ❌ | Meta WhatsApp API |
 | `VITE_WHATSAPP_ACCESS_TOKEN` | ❌ | Meta WhatsApp API |
 

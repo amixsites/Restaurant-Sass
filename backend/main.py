@@ -3,7 +3,7 @@ import asyncio
 import secrets
 import io
 from typing import Optional, List
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, RedirectResponse
 from supabase import create_client, Client
@@ -17,21 +17,41 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from reportlab.lib import colors
 
-load_dotenv(dotenv_path="../.env")
+load_dotenv(dotenv_path=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env")))
+
+
+def get_env_var(name: str, default: Optional[str] = None, required: bool = False) -> Optional[str]:
+    value = os.environ.get(name, default)
+    if isinstance(value, str):
+        value = value.strip()
+    if required and not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+frontend_url = get_env_var("FRONTEND_URL", default="http://localhost:5173")
+frontend_origins = [origin.strip() for origin in frontend_url.split(",") if origin.strip()]
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=frontend_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-url: str = os.environ.get("VITE_SUPABASE_URL").strip()
-key: str = os.environ.get("VITE_SUPABASE_ANON_KEY").strip()
+url: str = get_env_var("VITE_SUPABASE_URL", required=True)
+key: str = get_env_var("VITE_SUPABASE_ANON_KEY", required=True)
+secret_key: Optional[str] = get_env_var("SECRET_KEY")
+
+if os.environ.get("ENV", "").lower() == "production" and not secret_key:
+    raise RuntimeError("SECRET_KEY is required in production. Set SECRET_KEY in your environment.")
+
 supabase: Client = create_client(url, key)
+
+def get_qr_base_url() -> str:
+    return get_env_var("QR_BASE_URL", default=get_env_var("BACKEND_URL", default="http://localhost:8000")) or "http://localhost:8000"
 
 def get_authenticated_client(token: Optional[str] = None) -> Client:
     client = create_client(url, key)
@@ -234,7 +254,6 @@ def handle_qr_scan(table_token: str):
         "table_id": table_id
     }).execute()
     
-    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173").strip()
     return RedirectResponse(url=f"{frontend_url}/menu?session_id={session_id}")
 
 @app.get("/api/session/{session_id}")
@@ -276,7 +295,7 @@ def get_qr_image(table_id: str):
         raise HTTPException(status_code=404, detail="QR Code not generated for this table yet.")
         
     token = table_res.data[0]["qr_token"]
-    backend_url = os.environ.get("BACKEND_URL", "http://localhost:8000").strip()
+    backend_url = get_qr_base_url()
     qr_url = f"{backend_url}/order/{token}"
     
     qr = qrcode.QRCode(version=1, box_size=10, border=1)
@@ -311,6 +330,7 @@ def get_qr_pdf(table_id: str):
     backend_url = os.environ.get("BACKEND_URL", "http://localhost:8000").strip()
     qr_url = f"{backend_url}/order/{token}"
     
+    qr_url = f"{get_qr_base_url()}/order/{token}"
     pdf_buffer = generate_pdf_buffer(rest_name, table_num, qr_url)
     return StreamingResponse(
         pdf_buffer,
@@ -384,6 +404,108 @@ def place_customer_order(req: PlaceOrderRequest):
     
     return {"success": True, "order": order, "items": items_res.data}
 
+# --- Super Admin Impersonation Endpoints ---
+
+class EndImpersonateRequest(BaseModel):
+    restaurant_id: str
+    restaurant_name: str
+
+def verify_super_admin(client: Client):
+    """Verify the authenticated user has SUPER_ADMIN role. Returns user data or raises 403."""
+    user_res = client.auth.get_user()
+    if not user_res or not user_res.user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    db_user = client.table("users").select("role, email, full_name").eq("id", user_res.user.id).single().execute()
+    if not db_user.data or db_user.data.get("role") != "SUPER_ADMIN":
+        raise HTTPException(status_code=403, detail="Only Super Admins can perform this action.")
+    
+    return {
+        "id": user_res.user.id,
+        "email": db_user.data.get("email", user_res.user.email or ""),
+        "full_name": db_user.data.get("full_name", ""),
+    }
+
+@app.post("/api/super-admin/restaurants/{restaurant_id}/impersonate")
+def impersonate_restaurant(restaurant_id: str, request: Request, authorization: Optional[str] = Header(None)):
+    """Start impersonating a restaurant. Logs the action to audit_logs."""
+    client = get_authenticated_client(authorization)
+    admin_user = verify_super_admin(client)
+    
+    # Fetch restaurant details
+    rest_res = client.table("restaurants").select("id, name").eq("id", restaurant_id).single().execute()
+    if not rest_res.data:
+        raise HTTPException(status_code=404, detail="Restaurant not found.")
+    
+    restaurant = rest_res.data
+    
+    # Create audit log entry
+    client.table("audit_logs").insert({
+        "super_admin_id": admin_user["id"],
+        "super_admin_email": admin_user["email"],
+        "restaurant_id": restaurant["id"],
+        "restaurant_name": restaurant["name"],
+        "action": "IMPERSONATE_START",
+        "ip_address": request.client.host if request.client else None,
+        "user_agent": request.headers.get("user-agent", ""),
+    }).execute()
+    
+    return {
+        "success": True,
+        "restaurant_id": restaurant["id"],
+        "restaurant_name": restaurant["name"],
+        "impersonated_at": str(os.popen("date /t").read().strip()) if os.name == "nt" else "",
+    }
+
+@app.post("/api/super-admin/impersonate/end")
+def end_impersonation(req: EndImpersonateRequest, request: Request, authorization: Optional[str] = Header(None)):
+    """End impersonation and log the action."""
+    client = get_authenticated_client(authorization)
+    admin_user = verify_super_admin(client)
+    
+    # Create audit log entry
+    client.table("audit_logs").insert({
+        "super_admin_id": admin_user["id"],
+        "super_admin_email": admin_user["email"],
+        "restaurant_id": req.restaurant_id,
+        "restaurant_name": req.restaurant_name,
+        "action": "IMPERSONATE_END",
+        "ip_address": request.client.host if request.client else None,
+        "user_agent": request.headers.get("user-agent", ""),
+    }).execute()
+    
+    return {"success": True, "message": "Impersonation ended."}
+
+@app.get("/api/super-admin/audit-logs")
+def get_audit_logs(
+    page: int = 1,
+    limit: int = 20,
+    restaurant_id: Optional[str] = None,
+    authorization: Optional[str] = Header(None)
+):
+    """Fetch paginated audit logs. Only accessible by Super Admins."""
+    client = get_authenticated_client(authorization)
+    verify_super_admin(client)
+    
+    offset = (page - 1) * limit
+    
+    query = client.table("audit_logs").select("*", count="exact").order("created_at", desc=True)
+    
+    if restaurant_id:
+        query = query.eq("restaurant_id", restaurant_id)
+    
+    query = query.range(offset, offset + limit - 1)
+    res = query.execute()
+    
+    return {
+        "logs": res.data or [],
+        "total_count": res.count or 0,
+        "page": page,
+        "limit": limit,
+        "total_pages": max(1, -(-((res.count or 0)) // limit)),  # Ceiling division
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+

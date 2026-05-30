@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useTenantStore } from "@/store/tenantStore";
 import { useAuthStore } from "@/store/authStore";
+import { useImpersonationStore } from "@/store/impersonationStore";
 
 export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
   const [now, setNow] = useState(() => new Date());
   const { theme, toggleTheme } = useTheme();
   const { restaurantName } = useTenantStore();
   const { user, role } = useAuthStore();
+  const { isImpersonating, impersonatedRestaurantName } = useImpersonationStore();
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
@@ -30,7 +32,9 @@ export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
 
       <div className="hidden md:flex items-center gap-3">
         <div>
-          <div className="text-sm font-semibold leading-tight text-foreground">{restaurantName || "Spice Symphony"}</div>
+          <div className="text-sm font-semibold leading-tight text-foreground">
+            {isImpersonating ? impersonatedRestaurantName : (restaurantName || "Spice Symphony")}
+          </div>
           <div className="text-[11px] text-muted-foreground">
             {now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
             {" · "}
@@ -64,7 +68,9 @@ export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
           </div>
           <div className="hidden md:block text-left leading-tight min-w-0">
             <div className="text-sm font-medium truncate max-w-[120px] text-foreground">{fullName}</div>
-            <div className="text-[11px] text-muted-foreground uppercase truncate max-w-[120px]">{role?.toLowerCase()?.replace('_', ' ')}</div>
+            <div className="text-[11px] text-muted-foreground uppercase truncate max-w-[120px]">
+              {isImpersonating ? 'impersonating admin' : role?.toLowerCase()?.replace('_', ' ')}
+            </div>
           </div>
           <ChevronDown className="size-4 text-muted-foreground hidden md:block" />
         </div>

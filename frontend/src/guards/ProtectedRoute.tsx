@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import { useImpersonationStore } from '@/store/impersonationStore';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
@@ -9,6 +10,7 @@ interface ProtectedRouteProps {
 
 export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   const { user, role, isLoading, isSubscriptionExpired } = useAuthStore();
+  const { isImpersonating } = useImpersonationStore();
   const location = useLocation();
 
   if (isLoading) {
@@ -33,5 +35,11 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/unauthorized" replace />;
   }
 
+  // If SUPER_ADMIN is accessing /admin/* routes, ensure they are impersonating
+  if (role === 'SUPER_ADMIN' && location.pathname.startsWith('/admin') && !isImpersonating) {
+    return <Navigate to="/super-admin" replace />;
+  }
+
   return <>{children}</>;
 };
+

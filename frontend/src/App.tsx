@@ -26,6 +26,8 @@ const Settings            = lazy(() => import('@/pages/RestaurantAdmin/Settings'
 const SuperAdminDashboard = lazy(() => import('@/pages/SuperAdmin/SuperAdminDashboard').then(m => ({ default: m.SuperAdminDashboard })));
 const CreateRestaurant    = lazy(() => import('@/pages/SuperAdmin/CreateRestaurant').then(m => ({ default: m.CreateRestaurant })));
 const SimulationDashboard = lazy(() => import('@/pages/SuperAdmin/SimulationDashboard').then(m => ({ default: m.SimulationDashboard })));
+const Restaurants         = lazy(() => import('@/pages/SuperAdmin/Restaurants').then(m => ({ default: m.Restaurants })));
+const AuditLogs           = lazy(() => import('@/pages/SuperAdmin/AuditLogs').then(m => ({ default: m.AuditLogs })));
 // ── Lazy-loaded pages ─────────────────────────────────────────────────────────
 // Note: keeping lazy definitions above and route path mappings below.
 const WaiterDashboard     = lazy(() => import('@/pages/Waiter/WaiterDashboard').then(m => ({ default: m.WaiterDashboard })));
@@ -71,7 +73,7 @@ function App() {
 
                   {/* ── Admin / Manager / Cashier ───────────────────── */}
                   <Route path="/admin" element={
-                    <ProtectedRoute allowedRoles={['RESTAURANT_ADMIN', 'MANAGER', 'CASHIER']}>
+                    <ProtectedRoute allowedRoles={['RESTAURANT_ADMIN', 'MANAGER', 'CASHIER', 'SUPER_ADMIN']}>
                       <AdminLayout />
                     </ProtectedRoute>
                   }>
@@ -92,8 +94,10 @@ function App() {
                     </ProtectedRoute>
                   }>
                     <Route index element={<SuperAdminDashboard />} />
+                    <Route path="restaurants" element={<Restaurants />} />
                     <Route path="create" element={<CreateRestaurant />} />
                     <Route path="simulation" element={<SimulationDashboard />} />
+                    <Route path="audit-logs" element={<AuditLogs />} />
                   </Route>
 
                   {/* ── Waiter ──────────────────────────────────────── */}
