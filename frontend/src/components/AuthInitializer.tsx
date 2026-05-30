@@ -107,14 +107,15 @@ export const AuthInitializer = ({ children }: { children: React.ReactNode }) => 
     });
 
     // 2. Listen to auth changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      // For token refresh or sign in, we want to reload the profile
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      // For token refresh or sign in, reload the profile
       if (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED' || _event === 'INITIAL_SESSION') {
         fetchProfileAndSetAuth(session);
-      } else if (_event === 'SIGNED_OUT') {
+      } else if (_event === 'SIGNED_OUT' || _event === 'TOKEN_REFRESH_FAILED') {
+        await supabase.auth.signOut();
         resetAuth();
         clearTenant();
-        endImpersonation(); // Clear impersonation on sign out
+        endImpersonation(); // Clear impersonation on sign out or failed refresh
       }
     });
 

@@ -8,7 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QrCode, Download, RefreshCw, Loader2, Table as TableIcon, FileDown, CheckCircle } from 'lucide-react';
 import { logger } from '@/lib/logger';
-import { getApiUrl } from '@/lib/api';
+import { getApiUrl, getAuthHeaders } from '@/lib/api';
 import { PartialTable } from './AddTableDrawer';
 
 interface TableQrModalProps {
@@ -46,13 +46,6 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({
     },
     enabled: !!restaurantId && isOpen,
   });
-
-  const getAuthHeaders = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return {
-      'Authorization': session ? `Bearer ${session.access_token}` : '',
-    };
-  };
 
   const handleGenerateQR = async () => {
     if (!table?.id) return;

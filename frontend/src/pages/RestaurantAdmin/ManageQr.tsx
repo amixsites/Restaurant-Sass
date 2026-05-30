@@ -19,7 +19,7 @@ import {
   Table as TableIcon
 } from 'lucide-react';
 import { logger } from '@/lib/logger';
-import { getApiUrl } from '@/lib/api';
+import { getApiUrl, getAuthHeaders } from '@/lib/api';
 
 const ManageQr = () => {
   const { data: tables = [], isLoading } = useTables();
@@ -46,13 +46,6 @@ const ManageQr = () => {
     },
     enabled: !!restaurantId,
   });
-
-  const getAuthHeaders = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return {
-      'Authorization': session ? `Bearer ${session.access_token}` : '',
-    };
-  };
 
   const setTableLoading = (tableId: string, loading: boolean) => {
     setLoadingStates(prev => ({ ...prev, [tableId]: loading }));
