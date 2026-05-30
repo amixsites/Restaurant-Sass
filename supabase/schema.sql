@@ -149,9 +149,12 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- RLS: Restaurants
--- Super Admin can see all, others can only see their own
+-- Super Admin can see and create all, others can only see their own
 CREATE POLICY "Super admins view all restaurants" ON restaurants
   FOR SELECT USING (get_auth_user_role() = 'SUPER_ADMIN');
+
+CREATE POLICY "Super admins can insert restaurants" ON restaurants
+  FOR INSERT WITH CHECK (get_auth_user_role() = 'SUPER_ADMIN');
 
 CREATE POLICY "Users view own restaurant" ON restaurants
   FOR SELECT USING (id = get_auth_user_restaurant_id() OR get_auth_user_role() = 'SUPER_ADMIN');

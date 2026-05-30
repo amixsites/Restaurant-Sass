@@ -1,24 +1,60 @@
-# Logs
-logs
+# ── Dependencies ──────────────────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+
+# ── Build output ──────────────────────────────────────────────────────────────
+dist/
+dist-ssr/
+**/dist/
+frontend/dist/
+
+# ── TypeScript build cache ────────────────────────────────────────────────────
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# ── Environment variables — NEVER commit real credentials ─────────────────────
+.env
+.env.local
+.env.production
+.env.staging
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# ── OS / Editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# ── Supabase local temp ───────────────────────────────────────────────────────
+supabase/.temp/
+
+# ── Python services ───────────────────────────────────────────────────────────
+python-services/**/venv/
+python-services/**/__pycache__/
+python-services/**/*.pyc
+python-services/**/*.pyo
+
+# ── Sensitive files ───────────────────────────────────────────────────────────
+credentials.txt
+*.pem
+*.key
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.local
+.sixth/
