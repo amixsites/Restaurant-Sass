@@ -140,7 +140,10 @@ def calculate_analytics(supabase, restaurant_id: str, range_str: str = "Weekly")
     served_count = len([o for o in total_orders if o.get('status') == 'SERVED'])
     
     # Active orders count for today = PENDING + PREPARING + READY + SERVED created today
-    active_today_orders = len([o for o in today_orders if o.get('status') != 'COMPLETED' and o.get('status') != 'CANCELLED'])
+    active_today_orders = len([o for o in today_orders if o.get('status') not in ('COMPLETED', 'CANCELLED')])
+    
+    # Pending bills = orders that are SERVED or READY today (waiting for payment/invoice)
+    pending_bills_today = len([o for o in today_orders if o.get('status') in ('SERVED', 'READY')])
 
     # Table Seating Occupancy
     total_tables = len(tables)
@@ -343,8 +346,8 @@ def calculate_analytics(supabase, restaurant_id: str, range_str: str = "Weekly")
         'orders': {
             'total': total_orders_count,
             'completed': completed_orders_count,
-            'pending': pending_orders_count,  # shown as "Pending Bills" on admin dashboard
-            'active': active_today_orders,    # shown as "Active Orders" on admin dashboard
+            'pending': pending_bills_today,     # today's orders waiting for payment
+            'active': active_today_orders,      # shown as "Active Orders" on admin dashboard
             'today': today_orders_count,
             'preparing': preparing_count,
             'ready': ready_count,

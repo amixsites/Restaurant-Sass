@@ -121,7 +121,7 @@ export const AdminDashboard = () => {
               ))}
             </div>
           </div>
-          <div className="h-64">
+          <div className="h-64 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
@@ -184,7 +184,7 @@ export const AdminDashboard = () => {
         <div className="glass rounded-2xl p-5 shadow-card xl:col-span-2">
           <h3 className="font-semibold mb-1 text-foreground">Hourly Orders</h3>
           <p className="text-xs text-muted-foreground mb-4">Peak rush detection</p>
-          <div className="h-48">
+          <div className="h-48 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={salesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />

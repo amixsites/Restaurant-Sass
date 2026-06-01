@@ -50,8 +50,16 @@ if os.environ.get("ENV", "").lower() == "production" and not secret_key:
 
 supabase: Client = create_client(url, key)
 
-def get_qr_base_url() -> str:
-    return get_env_var("QR_BASE_URL", default=get_env_var("BACKEND_URL", default="http://localhost:8000")) or "http://localhost:8000"
+def get_qr_base_url(request: Request | None = None) -> str:
+    """Return the base URL for QR code links (the backend's public URL).
+    Priority: QR_BASE_URL env var → BACKEND_URL env var → request.base_url → localhost fallback."""
+    env_url = get_env_var("QR_BASE_URL") or get_env_var("BACKEND_URL")
+    if env_url:
+        return env_url.rstrip("/")
+    if request is not None:
+        # Use the actual request base_url (handles reverse-proxy X-Forwarded headers)
+        return str(request.base_url).rstrip("/")
+    return "http://localhost:8000"
 
 def get_authenticated_client(token: Optional[str] = None) -> Client:
     client = create_client(url, key)
@@ -219,25 +227,45 @@ def generate_qr(table_id: str, authorization: Optional[str] = Header(None)):
 
 @app.post("/api/tables/{table_id}/regenerate-qr")
 def regenerate_qr(table_id: str, authorization: Optional[str] = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header missing.")
+    
     client = get_authenticated_client(authorization)
     
-    # Check role
-    user_res = client.auth.get_user()
-    if not user_res or not user_res.user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-        
-    db_user = client.table("users").select("role").eq("id", user_res.user.id).single().execute()
-    if not db_user.data or db_user.data.get("role") not in ["RESTAURANT_ADMIN", "SUPER_ADMIN"]:
-        raise HTTPException(status_code=403, detail="Only admins can regenerate table QR tokens.")
+    # Verify user is authenticated
+    try:
+        user_res = client.auth.get_user()
+        if not user_res or not user_res.user:
+            raise HTTPException(status_code=401, detail="Unauthorized: invalid token.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth check failed: {str(e)}")
+    
+    # Verify role
+    try:
+        db_user = client.table("users").select("role").eq("id", user_res.user.id).single().execute()
+        if not db_user.data or db_user.data.get("role") not in ["RESTAURANT_ADMIN", "SUPER_ADMIN"]:
+            raise HTTPException(status_code=403, detail="Only admins can regenerate table QR tokens.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to verify role: {str(e)}")
         
     token = f"t_{secrets.token_hex(4)}"
-    res = client.table("tables").update({"qr_token": token}).eq("id", table_id).execute()
-    if not res.data:
-         raise HTTPException(status_code=404, detail="Table not found.")
+    try:
+        res = client.table("tables").update({"qr_token": token}).eq("id", table_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Table not found or you don't have permission to update it.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update QR token: {str(e)}")
+    
     return {"success": True, "qr_token": token, "table": res.data[0]}
 
 @app.get("/order/{table_token}")
-def handle_qr_scan(table_token: str):
+def handle_qr_scan(table_token: str, request: Request):
     table_res = supabase.table("tables").select("id, restaurant_id").eq("qr_token", table_token).execute()
     if not table_res.data:
         raise HTTPException(status_code=404, detail="Invalid table token. This QR code is no longer active.")
@@ -254,7 +282,18 @@ def handle_qr_scan(table_token: str):
         "table_id": table_id
     }).execute()
     
-    return RedirectResponse(url=f"{frontend_url}/menu?session_id={session_id}")
+    # Use FRONTEND_URL env var. For local dev, fall back to localhost:5173 only
+    # if the env var is not configured or still has placeholder value.
+    configured_frontend = frontend_url
+    is_placeholder = not configured_frontend or "your-vercel" in configured_frontend
+    host = request.headers.get("host", "")
+    if is_placeholder and ("localhost" in host or "127.0.0.1" in host):
+        current_frontend_url = "http://localhost:5173"
+    else:
+        # Use the first configured URL (supports comma-separated for CORS)
+        current_frontend_url = frontend_origins[0] if frontend_origins else configured_frontend
+        
+    return RedirectResponse(url=f"{current_frontend_url}/menu?session_id={session_id}")
 
 @app.get("/api/session/{session_id}")
 def get_session_details(session_id: str):
@@ -289,13 +328,14 @@ def get_session_details(session_id: str):
     }
 
 @app.get("/api/tables/{table_id}/qr-code-image")
-def get_qr_image(table_id: str):
+def get_qr_image(table_id: str, request: Request):
     table_res = supabase.table("tables").select("qr_token").eq("id", table_id).execute()
     if not table_res.data or len(table_res.data) == 0 or not table_res.data[0].get("qr_token"):
         raise HTTPException(status_code=404, detail="QR Code not generated for this table yet.")
         
     token = table_res.data[0]["qr_token"]
-    backend_url = get_qr_base_url()
+    # Use configured QR_BASE_URL (public backend URL) so QR codes encode the real URL
+    backend_url = get_qr_base_url(request)
     qr_url = f"{backend_url}/order/{token}"
     
     qr = qrcode.QRCode(version=1, box_size=10, border=1)
@@ -306,10 +346,14 @@ def get_qr_image(table_id: str):
     buffer = io.BytesIO()
     qr_img.save(buffer, format="PNG")
     buffer.seek(0)
-    return StreamingResponse(buffer, media_type="image/png")
+    return StreamingResponse(
+        buffer,
+        media_type="image/png",
+        headers={"Content-Disposition": "inline; filename=qr.png", "Cache-Control": "no-cache"}
+    )
 
 @app.get("/api/tables/{table_id}/qr-code-pdf")
-def get_qr_pdf(table_id: str):
+def get_qr_pdf(table_id: str, request: Request):
     table_res = supabase.table("tables").select("table_number, restaurant_id, qr_token").eq("id", table_id).execute()
     if not table_res.data or len(table_res.data) == 0 or not table_res.data[0].get("qr_token"):
         raise HTTPException(status_code=404, detail="QR Code not generated for this table yet.")
@@ -327,10 +371,9 @@ def get_qr_pdf(table_id: str):
     except Exception as e:
         print(f"Error fetching restaurant name for PDF: {e}")
     
-    backend_url = os.environ.get("BACKEND_URL", "http://localhost:8000").strip()
+    # Use configured QR_BASE_URL so PDF QR codes encode the real public URL
+    backend_url = get_qr_base_url(request)
     qr_url = f"{backend_url}/order/{token}"
-    
-    qr_url = f"{get_qr_base_url()}/order/{token}"
     pdf_buffer = generate_pdf_buffer(rest_name, table_num, qr_url)
     return StreamingResponse(
         pdf_buffer,

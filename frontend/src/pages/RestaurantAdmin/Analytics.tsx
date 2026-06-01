@@ -112,7 +112,7 @@ export const Analytics = () => {
         {/* Revenue Trend Area Chart */}
         <div className="glass rounded-2xl p-5 xl:col-span-2 shadow-card">
           <h3 className="font-semibold mb-4 text-foreground">Revenue Trend</h3>
-          <div className="h-72">
+          <div className="h-72 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
@@ -142,7 +142,7 @@ export const Analytics = () => {
         {/* Category Mix Pie Chart */}
         <div className="glass rounded-2xl p-5 shadow-card">
           <h3 className="font-semibold mb-4 text-foreground">Top Items / Category Mix</h3>
-          <div className="h-72">
+          <div className="h-72 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={topItems} dataKey="value" nameKey="name" innerRadius={60} outerRadius={90} paddingAngle={3}>
@@ -171,7 +171,7 @@ export const Analytics = () => {
         {/* Orders Bar Chart */}
         <div className="glass rounded-2xl p-5 xl:col-span-2 shadow-card">
           <h3 className="font-semibold mb-4 text-foreground">Orders by Time</h3>
-          <div className="h-56">
+          <div className="h-56 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={salesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
