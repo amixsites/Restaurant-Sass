@@ -131,23 +131,45 @@ export const CustomerMenu = () => {
         setIsSessionLoading(true);
         setSessionError(null);
         try {
-          const res = await fetch(getApiUrl(`/api/session/${activeSessionId}`));
+          const url = getApiUrl(`/api/session/${activeSessionId}`);
+          console.log('SESSION_FETCH', { sessionId: activeSessionId, url });
+          const res = await fetch(url);
+          console.log('SESSION_STATUS', { status: res.status, ok: res.ok });
+
+          let data: any = null;
+          try {
+            data = await res.json();
+          } catch (parseErr) {
+            console.error('SESSION_PARSE_ERROR', parseErr);
+            setSessionError(parseErr instanceof Error ? parseErr.message : JSON.stringify(parseErr));
+            setIsSessionLoading(false);
+            return;
+          }
+
+          console.log('SESSION_DATA', data);
+
           if (res.ok) {
-            const sess = await res.json();
-            setRestaurantId(sess.restaurant_id);
-            setTableId(sess.table_id);
-            setRestaurantName(sess.restaurant_name);
-            setTableNumber(sess.table_number);
-            
-            // Sync with Zustand and localStorage
-            useCartStore.getState().setSessionDetails(activeSessionId, sess.restaurant_id, sess.table_id);
-            localStorage.setItem('dine_swift_session_id', activeSessionId);
+            // Defensive checks for expected response shape
+            if (!data || !data.session_id || !data.restaurant_id || !data.table_id) {
+              console.error('SESSION_INVALID_PAYLOAD', data);
+              setSessionError('SESSION_INVALID_PAYLOAD: unexpected session response shape.');
+            } else {
+              setRestaurantId(data.restaurant_id);
+              setTableId(data.table_id);
+              setRestaurantName(data.restaurant_name || 'DineSwift');
+              setTableNumber(data.table_number || '');
+
+              // Sync with Zustand and localStorage
+              useCartStore.getState().setSessionDetails(activeSessionId, data.restaurant_id, data.table_id);
+              localStorage.setItem('dine_swift_session_id', activeSessionId);
+            }
           } else {
-            const errData = await res.json();
-            setSessionError(errData.detail || 'Invalid or expired session. Please scan table QR again.');
+            console.error('SESSION_LOAD_FAILED', data);
+            setSessionError(data?.detail || (typeof data === 'string' ? data : JSON.stringify(data)) || 'Invalid or expired session. Please scan table QR again.');
           }
         } catch (err: any) {
-          setSessionError('Network error connecting to session. Please reload or scan QR again.');
+          console.error('SESSION_LOAD_ERROR', err);
+          setSessionError(err instanceof Error ? err.message : JSON.stringify(err));
         } finally {
           setIsSessionLoading(false);
         }
