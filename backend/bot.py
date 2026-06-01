@@ -63,8 +63,11 @@ CUSTOMER_NAMES = ["Rahul", "Priya", "Amit", "Sneha", "Anjali", "Akash", "Vikram"
 
 class RestaurantSimulator:
     def __init__(self):
-        self.url = os.environ.get("VITE_SUPABASE_URL")
-        self.anon_key = os.environ.get("VITE_SUPABASE_ANON_KEY")
+        self.url = os.environ.get("SUPABASE_URL") or os.environ.get("VITE_SUPABASE_URL")
+        self.anon_key = os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("VITE_SUPABASE_ANON_KEY")
+
+        if not self.url or not self.anon_key:
+            raise RuntimeError("Missing Supabase env vars: SUPABASE_URL and SUPABASE_ANON_KEY")
         
         self.is_running = False
         self.is_paused = False

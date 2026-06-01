@@ -4,20 +4,17 @@ import secrets
 import io
 import re
 import uuid
+import urllib.request
 from typing import Optional, List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, RedirectResponse
+from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from analytics import calculate_analytics
 from bot import RestaurantSimulator
-import qrcode
-from reportlab.lib.pagesizes import A6
-from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
-from reportlab.lib import colors
+import traceback
 
 load_dotenv(dotenv_path=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env")))
 
@@ -35,6 +32,22 @@ frontend_origins = [origin.strip() for origin in frontend_url.split(",") if orig
 
 app = FastAPI()
 
+@app.middleware("http")
+async def global_exception_handler(request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        print("🔥 UNHANDLED ERROR:", str(e))
+        traceback.print_exc()
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "INTERNAL_SERVER_ERROR",
+                "message": str(e)
+            }
+        )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=frontend_origins,
@@ -43,14 +56,79 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-url: str = get_env_var("VITE_SUPABASE_URL", required=True)
-key: str = get_env_var("VITE_SUPABASE_ANON_KEY", required=True)
+supabase: Client | None = None
+
+def init_supabase() -> Optional[Client]:
+    url = get_env_var("SUPABASE_URL") or get_env_var("VITE_SUPABASE_URL")
+    key = get_env_var("SUPABASE_ANON_KEY") or get_env_var("VITE_SUPABASE_ANON_KEY")
+
+    if not url or not key:
+        print("[FATAL] Missing Supabase env vars; expected SUPABASE_URL and SUPABASE_ANON_KEY.")
+        return None
+
+    try:
+        client = create_client(url, key)
+        print("[OK] Supabase client initialized")
+        return client
+    except Exception as e:
+        print("[FATAL] Supabase init failed:", str(e))
+        return None
+
+async def keep_alive_loop():
+    keep_alive_url = get_env_var("KEEP_ALIVE_URL") or get_env_var("BACKEND_URL")
+    if not keep_alive_url:
+        print("[WARN] No KEEP_ALIVE_URL or BACKEND_URL configured, keep-alive loop disabled.")
+        return
+
+    while True:
+        try:
+            print(f"[KEEP_ALIVE] Pinging {keep_alive_url}")
+            with urllib.request.urlopen(keep_alive_url, timeout=10) as resp:
+                print(f"[KEEP_ALIVE] status={resp.status}")
+        except Exception as e:
+            print("[KEEP_ALIVE] ping failed:", str(e))
+        await asyncio.sleep(600)
+
+@app.on_event("startup")
+async def startup_check():
+    print("🚀 Backend starting...")
+
+    if not supabase:
+        print("❌ Supabase not initialized")
+    else:
+        print("✅ Backend ready")
+        asyncio.create_task(keep_alive_loop())
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "supabase": supabase is not None
+    }
+
+@app.get("/")
+def root():
+    return {"status": "alive"}
+
 secret_key: Optional[str] = get_env_var("SECRET_KEY")
 
 if os.environ.get("ENV", "").lower() == "production" and not secret_key:
     raise RuntimeError("SECRET_KEY is required in production. Set SECRET_KEY in your environment.")
 
-supabase: Client = create_client(url, key)
+supabase = init_supabase()
+
+
+def safe_supabase_call(callable_action, action_name: str = "supabase_call"):
+    try:
+        return callable_action()
+    except Exception as e:
+        log_qr_event("QR_ERROR", f"{action_name}_exception", error=str(e))
+        raise HTTPException(status_code=500, detail={
+            "error_code": "SUPABASE_CALL_FAILED",
+            "action": action_name,
+            "message": "Unexpected error while accessing Supabase.",
+            "supabase_error": str(e)
+        })
 
 TOKEN_PATTERN = re.compile(r"^t_[0-9a-f]{8}$")
 SESSION_PATTERN = re.compile(r"^sess_[A-Za-z0-9_-]{16,}$")
@@ -211,6 +289,12 @@ def get_simulation_status():
 # --- Secure Table QR Code & Seating Session Endpoints ---
 
 def generate_pdf_buffer(restaurant_name: str, table_number: str, qr_url: str) -> io.BytesIO:
+    from reportlab.lib.pagesizes import A6
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.utils import ImageReader
+    from reportlab.lib import colors
+    import qrcode
+
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A6)
     width, height = A6
@@ -402,7 +486,10 @@ def handle_qr_scan(table_token: str, request: Request):
     validate_qr_token(table_token)
     log_qr_event("QR_SCAN", "scan_request", token=table_token)
 
-    table_res = supabase.table("tables").select("id, restaurant_id").eq("qr_token", table_token).execute()
+    table_res = safe_supabase_call(
+        lambda: supabase.table("tables").select("id, restaurant_id").eq("qr_token", table_token).execute(),
+        action_name="table_lookup"
+    )
     log_qr_event(
         "QR_SCAN",
         "table_lookup",
@@ -431,11 +518,14 @@ def handle_qr_scan(table_token: str, request: Request):
     
     session_id = f"sess_{secrets.token_urlsafe(16)}"
     
-    insert_res = supabase.table("customer_sessions").insert({
-        "session_id": session_id,
-        "restaurant_id": restaurant_id,
-        "table_id": table_id
-    }).execute()
+    insert_res = safe_supabase_call(
+        lambda: supabase.table("customer_sessions").insert({
+            "session_id": session_id,
+            "restaurant_id": restaurant_id,
+            "table_id": table_id
+        }).execute(),
+        action_name="session_insert"
+    )
     log_qr_event(
         "QR_SESSION",
         "session_insert",
@@ -454,7 +544,10 @@ def handle_qr_scan(table_token: str, request: Request):
             "supabase_error": str(getattr(insert_res, "error", ""))
         })
 
-    verify_res = supabase.table("customer_sessions").select("session_id").eq("session_id", session_id).single().execute()
+    verify_res = safe_supabase_call(
+        lambda: supabase.table("customer_sessions").select("session_id").eq("session_id", session_id).single().execute(),
+        action_name="session_verify"
+    )
     log_qr_event(
         "QR_SESSION",
         "session_verify",
@@ -582,6 +675,7 @@ def get_qr_image(table_id: str, request: Request):
     qr_url = f"{backend_url}/order/{token}"
     log_qr_event("QR_GENERATE", "qr_image_url", table_id=table_id, qr_url=qr_url)
 
+    import qrcode
     qr = qrcode.QRCode(version=1, box_size=10, border=1)
     qr.add_data(qr_url)
     qr.make(fit=True)
