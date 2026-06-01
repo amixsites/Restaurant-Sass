@@ -9,7 +9,17 @@ const RENDER_BACKEND = 'https://dineinflow.onrender.com';
 
 function resolveApiBase(): string {
   const envUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
-  if (envUrl) return envUrl;
+  if (envUrl && envUrl !== 'undefined' && envUrl !== 'null' && envUrl.trim() !== '') {
+    return envUrl;
+  }
+  // Fallback to Render production backend on any Vercel domain or external host
+  if (
+    typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1'
+  ) {
+    return RENDER_BACKEND;
+  }
   if (import.meta.env.MODE === 'production') return RENDER_BACKEND;
   return ''; // dev → Vite proxy → localhost:8000
 }

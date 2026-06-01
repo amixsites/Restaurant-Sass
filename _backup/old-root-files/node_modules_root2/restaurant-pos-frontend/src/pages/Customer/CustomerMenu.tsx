@@ -5,7 +5,7 @@ import { Search, ArrowLeft, ShoppingBag, Plus, Minus, LayoutGrid, List, User, Ph
 import { MobileShell } from '@/components/MobileShell';
 import { useCustomerMenu } from '@/hooks/api/useCustomerMenu';
 import { useCartStore } from '@/store/cartStore';
-import { getApiUrl, fetchWithRetry } from '@/lib/api';
+import { api, fetchWithRetry } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
 // Veg/Non-veg dot indicator
@@ -137,7 +137,7 @@ export const CustomerMenu = () => {
 
         try {
           const res = await fetchWithRetry(
-            getApiUrl(`/api/session/${activeSessionId}`),
+            api.session(activeSessionId),
             {},
             4,    // 4 retries: 1.5s → 3s → 6s → 12s
             1500,
