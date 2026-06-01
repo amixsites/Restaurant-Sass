@@ -9,17 +9,26 @@ const RENDER_BACKEND = 'https://dineinflow.onrender.com';
 
 function resolveApiBase(): string {
   const envUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
-  if (envUrl && envUrl !== 'undefined' && envUrl !== 'null' && envUrl.trim() !== '') {
-    return envUrl;
-  }
-  // Fallback to Render production backend on any Vercel domain or external host
-  if (
+  
+  const isLocalHostSite =
     typeof window !== 'undefined' &&
-    window.location.hostname !== 'localhost' &&
-    window.location.hostname !== '127.0.0.1'
-  ) {
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+  const isEnvLocalHost =
+    envUrl && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1') || envUrl.includes('192.168.'));
+
+  if (envUrl && envUrl !== 'undefined' && envUrl !== 'null' && envUrl.trim() !== '') {
+    // If the site is running on localhost, or the env variable does not point to localhost, use envUrl
+    if (isLocalHostSite || !isEnvLocalHost) {
+      return envUrl;
+    }
+  }
+
+  // Fallback to Render production backend on any Vercel domain or external host
+  if (!isLocalHostSite) {
     return RENDER_BACKEND;
   }
+
   if (import.meta.env.MODE === 'production') return RENDER_BACKEND;
   return ''; // dev → Vite proxy → localhost:8000
 }
