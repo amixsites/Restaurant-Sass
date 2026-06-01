@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import { useEffect } from 'react';
-import { getApiUrl, getAuthHeaders } from '@/lib/api';
+import { api, getAuthHeaders, fetchWithRetry } from '@/lib/api';
 
 export const useAnalytics = (range: string = 'Weekly') => {
   const { restaurantId } = useAuthStore();
@@ -29,9 +29,7 @@ export const useAnalytics = (range: string = 'Weekly') => {
       if (!restaurantId) return null;
 
       const headers = await getAuthHeaders();
-      const res = await fetch(getApiUrl(`/api/analytics/${restaurantId}?range=${range}`), {
-        headers,
-      });
+      const res = await fetchWithRetry(api.analytics(restaurantId, range), { headers });
 
       if (!res.ok) {
         throw new Error('Failed to fetch analytics from backend.');

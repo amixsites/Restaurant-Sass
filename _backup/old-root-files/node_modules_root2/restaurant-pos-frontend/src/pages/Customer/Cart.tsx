@@ -5,7 +5,7 @@ import confetti from 'canvas-confetti';
 import { ArrowLeft, Minus, Plus, Trash2, Check, ChefHat, Receipt, Loader2 } from 'lucide-react';
 import { MobileShell } from '@/components/MobileShell';
 import { useCartStore } from '@/store/cartStore';
-import { getApiUrl } from '@/lib/api';
+import { api, fetchWithRetry } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
@@ -131,7 +131,7 @@ export const Cart = () => {
           }))
         };
 
-        const res = await fetch(getApiUrl('/api/orders/place'), {
+        const res = await fetchWithRetry(api.placeOrder(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)

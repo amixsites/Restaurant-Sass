@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, ArrowLeft, ShoppingBag, Plus, Minus, LayoutGrid, List, User, Phone, Hash, ArrowRight, ChefHat, Loader2, AlertCircle } from 'lucide-react';
+import { Search, ArrowLeft, ShoppingBag, Plus, Minus, LayoutGrid, List, User, Phone, Hash, ArrowRight, ChefHat, Loader2, AlertCircle, Wifi } from 'lucide-react';
 import { MobileShell } from '@/components/MobileShell';
 import { useCustomerMenu } from '@/hooks/api/useCustomerMenu';
 import { useCartStore } from '@/store/cartStore';
-import { getApiUrl } from '@/lib/api';
+import { getApiUrl, fetchWithRetry } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
 // Veg/Non-veg dot indicator
@@ -113,6 +113,7 @@ export const CustomerMenu = () => {
   const [tableNumber, setTableNumber] = useState<string>('');
   const [isSessionLoading, setIsSessionLoading] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [isWakingUp, setIsWakingUp] = useState(false); // Render cold start state
 
   const { data, isLoading: isMenuLoading } = useCustomerMenu(restaurantId);
   const { items: cartItems, addItem, updateQuantity, customerName, customerPhone, setCustomerDetails } = useCartStore();
@@ -130,46 +131,36 @@ export const CustomerMenu = () => {
       if (activeSessionId && !routeRestaurantId && !routeTableId) {
         setIsSessionLoading(true);
         setSessionError(null);
+
+        // Show 'waking up' message after 2s if server is cold-starting
+        const wakeTimer = setTimeout(() => setIsWakingUp(true), 2000);
+
         try {
-          const url = getApiUrl(`/api/session/${activeSessionId}`);
-          console.log('SESSION_FETCH', { sessionId: activeSessionId, url });
-          const res = await fetch(url);
-          console.log('SESSION_STATUS', { status: res.status, ok: res.ok });
-
-          let data: any = null;
-          try {
-            data = await res.json();
-          } catch (parseErr) {
-            console.error('SESSION_PARSE_ERROR', parseErr);
-            setSessionError(parseErr instanceof Error ? parseErr.message : JSON.stringify(parseErr));
-            setIsSessionLoading(false);
-            return;
-          }
-
-          console.log('SESSION_DATA', data);
+          const res = await fetchWithRetry(
+            getApiUrl(`/api/session/${activeSessionId}`),
+            {},
+            4,    // 4 retries: 1.5s → 3s → 6s → 12s
+            1500,
+          );
+          clearTimeout(wakeTimer);
+          setIsWakingUp(false);
 
           if (res.ok) {
-            // Defensive checks for expected response shape
-            if (!data || !data.session_id || !data.restaurant_id || !data.table_id) {
-              console.error('SESSION_INVALID_PAYLOAD', data);
-              setSessionError('SESSION_INVALID_PAYLOAD: unexpected session response shape.');
-            } else {
-              setRestaurantId(data.restaurant_id);
-              setTableId(data.table_id);
-              setRestaurantName(data.restaurant_name || 'DineSwift');
-              setTableNumber(data.table_number || '');
-
-              // Sync with Zustand and localStorage
-              useCartStore.getState().setSessionDetails(activeSessionId, data.restaurant_id, data.table_id);
-              localStorage.setItem('dine_swift_session_id', activeSessionId);
-            }
+            const sess = await res.json();
+            setRestaurantId(sess.restaurant_id);
+            setTableId(sess.table_id);
+            setRestaurantName(sess.restaurant_name);
+            setTableNumber(sess.table_number);
+            useCartStore.getState().setSessionDetails(activeSessionId, sess.restaurant_id, sess.table_id);
+            localStorage.setItem('dine_swift_session_id', activeSessionId);
           } else {
-            console.error('SESSION_LOAD_FAILED', data);
-            setSessionError(data?.detail || (typeof data === 'string' ? data : JSON.stringify(data)) || 'Invalid or expired session. Please scan table QR again.');
+            const errData = await res.json().catch(() => ({}));
+            setSessionError(errData.detail || 'Invalid or expired session. Please scan table QR again.');
           }
         } catch (err: any) {
-          console.error('SESSION_LOAD_ERROR', err);
-          setSessionError(err instanceof Error ? err.message : JSON.stringify(err));
+          clearTimeout(wakeTimer);
+          setIsWakingUp(false);
+          setSessionError('Could not connect to server. Please check your connection and scan the QR code again.');
         } finally {
           setIsSessionLoading(false);
         }
@@ -247,8 +238,23 @@ export const CustomerMenu = () => {
 
   if (isMenuLoading || isSessionLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-screen flex-col items-center justify-center gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        {isWakingUp && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col items-center gap-1 text-center px-6"
+          >
+            <div className="flex items-center gap-2 text-primary font-semibold text-sm">
+              <Wifi className="size-4 animate-pulse" />
+              Waking up server…
+            </div>
+            <p className="text-xs text-muted-foreground max-w-[240px]">
+              The server is starting up. This takes up to 15 seconds. Please wait.
+            </p>
+          </motion.div>
+        )}
       </div>
     );
   }

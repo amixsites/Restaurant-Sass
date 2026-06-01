@@ -8,7 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QrCode, Download, RefreshCw, Loader2, Table as TableIcon, FileDown, CheckCircle } from 'lucide-react';
 import { logger } from '@/lib/logger';
-import { getApiUrl, getAuthHeaders } from '@/lib/api';
+import { api, getAuthHeaders, fetchWithRetry } from '@/lib/api';
 import { PartialTable } from './AddTableDrawer';
 
 interface TableQrModalProps {
@@ -52,10 +52,7 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({
     setIsQrLoading(true);
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch(getApiUrl(`/api/tables/${table.id}/generate-qr`), {
-        method: 'POST',
-        headers
-      });
+      const res = await fetchWithRetry(api.generateQR(table.id), { method: 'POST', headers });
       const data = await res.json();
       if (res.ok && data.success) {
         toast({ title: 'Success', description: 'QR code generated successfully.' });
@@ -88,10 +85,7 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({
     setIsQrLoading(true);
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch(getApiUrl(`/api/tables/${table.id}/regenerate-qr`), {
-        method: 'POST',
-        headers
-      });
+      const res = await fetchWithRetry(api.regenerateQR(table.id), { method: 'POST', headers });
       const data = await res.json();
       if (res.ok && data.success) {
         toast({ title: 'Success', description: 'QR code regenerated successfully.' });
@@ -117,13 +111,13 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({
 
   const handleDownloadPNG = () => {
     if (!table?.id) return;
-    window.open(getApiUrl(`/api/tables/${table.id}/qr-code-image`), '_blank');
+    window.open(api.qrImage(table.id), '_blank');
   };
 
   const handleDownloadPDF = () => {
     if (!table?.id) return;
     const link = document.createElement('a');
-    link.href = getApiUrl(`/api/tables/${table.id}/qr-code-pdf`);
+    link.href = api.qrPdf(table.id);
     link.download = `table_${table.table_number}_qr.pdf`;
     document.body.appendChild(link);
     link.click();
@@ -186,7 +180,7 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({
               {/* QR Large Preview Card */}
               <div className="relative size-48 bg-white rounded-2xl border shadow-sm p-4 flex justify-center items-center group overflow-hidden">
                 <img 
-                  src={getApiUrl(`/api/tables/${table.id}/qr-code-image?t=${qrRefreshKey}`)} 
+                  src={api.qrImage(table.id, qrRefreshKey)}
                   alt={`QR Code Table T-${table.table_number}`}
                   className="w-full h-full object-contain"
                 />

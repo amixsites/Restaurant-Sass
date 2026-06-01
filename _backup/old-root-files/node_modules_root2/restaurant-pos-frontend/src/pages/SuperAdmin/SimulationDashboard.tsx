@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Play, Pause, Square, Trash2, Loader2, Terminal, Key, Copy, Check, Activity, Shield, Percent, AlertCircle, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getApiUrl } from '@/lib/api';
+import { api, fetchWithRetry } from '@/lib/api';
 import { Link } from 'react-router-dom';
 
 export const SimulationDashboard = () => {
@@ -41,7 +41,7 @@ export const SimulationDashboard = () => {
 
     const fetchStatus = async () => {
       try {
-        const res = await fetch(getApiUrl('/api/simulation/status'));
+        const res = await fetchWithRetry(api.simStatus());
         if (res.ok) {
           const data = await res.json();
           setIsRunning(data.is_running);
@@ -86,7 +86,7 @@ export const SimulationDashboard = () => {
   const handleStart = async () => {
     setIsActionLoading(true);
     try {
-      const res = await fetch(getApiUrl('/api/simulation/start'), {
+      const res = await fetchWithRetry(api.simStart(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, num_restaurants: numRestaurants, speed }),
@@ -106,7 +106,7 @@ export const SimulationDashboard = () => {
 
   const handlePause = async () => {
     try {
-      const res = await fetch(getApiUrl('/api/simulation/pause'), { method: 'POST' });
+      const res = await fetchWithRetry(api.simPause(), { method: 'POST' });
       if (res.ok) {
         toast({ title: 'Simulation Paused', description: 'Bot order generation is temporarily paused.' });
       }
@@ -117,7 +117,7 @@ export const SimulationDashboard = () => {
 
   const handleStop = async () => {
     try {
-      const res = await fetch(getApiUrl('/api/simulation/stop'), { method: 'POST' });
+      const res = await fetchWithRetry(api.simStop(), { method: 'POST' });
       if (res.ok) {
         toast({ title: 'Simulation Stopped', description: 'Bot order generation stopped.' });
       }
@@ -132,7 +132,7 @@ export const SimulationDashboard = () => {
     }
     setIsActionLoading(true);
     try {
-      const res = await fetch(getApiUrl('/api/simulation/clear'), {
+      const res = await fetchWithRetry(api.simClear(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

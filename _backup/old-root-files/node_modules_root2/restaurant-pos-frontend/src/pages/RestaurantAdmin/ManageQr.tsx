@@ -19,7 +19,7 @@ import {
   Table as TableIcon
 } from 'lucide-react';
 import { logger } from '@/lib/logger';
-import { getApiUrl, getAuthHeaders } from '@/lib/api';
+import { api, getAuthHeaders, fetchWithRetry } from '@/lib/api';
 
 const ManageQr = () => {
   const { data: tables = [], isLoading } = useTables();
@@ -59,10 +59,7 @@ const ManageQr = () => {
     setTableLoading(tableId, true);
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch(getApiUrl(`/api/tables/${tableId}/generate-qr`), {
-        method: 'POST',
-        headers
-      });
+      const res = await fetchWithRetry(api.generateQR(tableId), { method: 'POST', headers });
       let data;
       try {
         data = await res.json();
@@ -91,10 +88,7 @@ const ManageQr = () => {
     setTableLoading(tableId, true);
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch(getApiUrl(`/api/tables/${tableId}/regenerate-qr`), {
-        method: 'POST',
-        headers
-      });
+      const res = await fetchWithRetry(api.regenerateQR(tableId), { method: 'POST', headers });
       let data;
       try {
         data = await res.json();
@@ -117,12 +111,12 @@ const ManageQr = () => {
   };
 
   const handleDownloadPNG = (tableId: string) => {
-    window.open(getApiUrl(`/api/tables/${tableId}/qr-code-image`), '_blank');
+    window.open(api.qrImage(tableId), '_blank');
   };
 
   const handleDownloadPDF = (tableId: string, tableNumber: string) => {
     const link = document.createElement('a');
-    link.href = getApiUrl(`/api/tables/${tableId}/qr-code-pdf`);
+    link.href = api.qrPdf(tableId);
     link.download = `table_${tableNumber}_qr.pdf`;
     document.body.appendChild(link);
     link.click();
@@ -233,7 +227,7 @@ const ManageQr = () => {
                     {/* Large QR Preview */}
                     <div className="relative size-44 bg-white rounded-2xl border p-3 flex justify-center items-center shadow-sm print:size-48 print:border-zinc-300">
                       <img
-                        src={getApiUrl(`/api/tables/${tableId}/qr-code-image?t=${refreshKey}`)}
+                        src={api.qrImage(tableId, refreshKey)}
                         alt={`QR code for table ${table.table_number}`}
                         className="w-full h-full object-contain"
                       />
