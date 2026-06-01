@@ -5,6 +5,10 @@
   "installCommand": "npm install",
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://dineinflow.onrender.com/api/$1"
+    },
+    {
       "source": "/((?!api/.*).*)",
       "destination": "/index.html"
     }
