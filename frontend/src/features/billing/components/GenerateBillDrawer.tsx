@@ -700,16 +700,18 @@ export const GenerateBillDrawer = ({
                           const formattedPhone = formatPhoneNumber(phone);
                           
                           // Get customer name (fallback to "Valued Customer")
-                          const customerName = order?.customer_name || 
-                                             order?.customer_phone?.slice(-4) 
+                          const customerName = order?.customer_name
+                                             ? order.customer_name
+                                             : order?.customer_phone
                                              ? `Customer ${order.customer_phone.slice(-4)}`
                                              : 'Valued Customer';
                           
                           // Generate professional WhatsApp message with bill link
+                          // billId must be the invoice UUID (not invoice_number) so /bill/:id resolves
                           const whatsappUrl = sendBillViaWhatsApp(formattedPhone, {
                             customerName: customerName,
                             restaurantName: restaurantName,
-                            billId: invoice?.invoice_number || tempInvoiceNumber,
+                            billId: invoice?.id || '',
                             billAmount: grandTotal,
                             visitDate: invoice?.created_at || order.created_at,
                             tableNumber: order.tables?.table_number,
@@ -805,16 +807,18 @@ export const GenerateBillDrawer = ({
                           const formattedPhone = formatPhoneNumber(phone);
                           
                           // Get customer name (fallback to "Valued Customer")
-                          const customerName = order?.customer_name || 
-                                             order?.customer_phone?.slice(-4) 
+                          const customerName = order?.customer_name
+                                             ? order.customer_name
+                                             : order?.customer_phone
                                              ? `Customer ${order.customer_phone.slice(-4)}`
                                              : 'Valued Customer';
                           
                           // Generate professional WhatsApp message with bill link
+                          // billId must be the invoice UUID (not invoice_number) so /bill/:id resolves
                           const whatsappUrl = sendBillViaWhatsApp(formattedPhone, {
                             customerName: customerName,
                             restaurantName: restaurantName,
-                            billId: invoice?.invoice_number || tempInvoiceNumber,
+                            billId: invoice?.id || '',
                             billAmount: grandTotal,
                             visitDate: invoice?.created_at || order.created_at,
                             tableNumber: order.tables?.table_number,

@@ -34,7 +34,7 @@ interface Order {
   created_at: string;
   tables?: {
     table_number: number;
-  };
+  }[];
   order_items: Array<{
     id: string;
     quantity: number;
@@ -80,13 +80,13 @@ export const BillPage = () => {
   const fetchBillData = async () => {
     try {
       setLoading(true);
-      logger.start('BILL_PAGE', 'FETCH', `Fetching bill data for: ${billId}`);
+      logger.start('BILLING', 'FETCH', `Fetching bill data for: ${billId}`);
 
-      // Fetch invoice by invoice_number
+      // Fetch invoice by id (UUID) — the WhatsApp bill link uses the invoice UUID
       const { data: invoiceData, error: invoiceError } = await supabase
         .from('invoices')
         .select('*')
-        .eq('invoice_number', billId)
+        .eq('id', billId)
         .maybeSingle();
 
       if (invoiceError) throw invoiceError;
@@ -121,7 +121,7 @@ export const BillPage = () => {
         .single();
 
       if (orderError) throw orderError;
-      setOrder(orderData);
+      setOrder(orderData as any);
 
       // Fetch restaurant details
       const { data: restaurantData, error: restaurantError } = await supabase
@@ -133,9 +133,9 @@ export const BillPage = () => {
       if (restaurantError) throw restaurantError;
       setRestaurant(restaurantData);
 
-      logger.success('BILL_PAGE', 'FETCH', 'Bill data loaded successfully');
+      logger.success('BILLING', 'FETCH', 'Bill data loaded successfully');
     } catch (err: any) {
-      logger.error('BILL_PAGE', 'FETCH', err);
+      logger.error('BILLING', 'FETCH', err);
       setError(err.message || 'Failed to load bill');
     } finally {
       setLoading(false);
@@ -392,7 +392,7 @@ export const BillPage = () => {
                   Table
                 </div>
                 <p className="text-sm font-bold text-foreground">
-                  {order.tables?.table_number ? `T-${order.tables.table_number}` : 'Takeaway'}
+                   {order.tables?.[0]?.table_number ? `T-${order.tables[0].table_number}` : 'Takeaway'}
                 </p>
               </div>
 

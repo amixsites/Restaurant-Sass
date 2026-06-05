@@ -10,7 +10,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Download, Printer, Share2, ArrowLeft, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
@@ -392,7 +391,7 @@ export function BillView() {
 
           {/* Bill Summary */}
           <div className="space-y-3">
-            <Separator />
+            <hr className="border-border" />
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
@@ -428,7 +427,7 @@ export function BillView() {
               )}
             </div>
             
-            <Separator />
+            <hr className="border-border" />
             
             <div className="flex justify-between text-lg font-bold">
               <span>Grand Total</span>

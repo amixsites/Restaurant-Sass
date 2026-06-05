@@ -133,11 +133,12 @@ export function generateWhatsAppMessage(details: BillDetails): string {
   } = details;
 
   // Validate required fields
-  if (!customerName || !restaurantName || !billId || billAmount == null || !visitDate) {
+  if (!customerName || !restaurantName || billAmount == null || !visitDate) {
     throw new Error('Missing required fields for WhatsApp message generation');
   }
 
-  const billUrl = generateBillUrl(billId);
+  const hasBillLink = billId && typeof billId === 'string' && billId.trim().length > 0;
+  const billUrl = hasBillLink ? generateBillUrl(billId) : null;
   const formattedAmount = formatCurrency(billAmount);
   const formattedDate = formatDate(visitDate);
 
@@ -153,9 +154,12 @@ export function generateWhatsAppMessage(details: BillDetails): string {
   }
   
   message += `• Bill Amount: ${formattedAmount}\n\n`;
-  message += `*View Your Bill:*\n`;
-  message += `🔗 ${billUrl}\n\n`;
-  message += `For your convenience, your digital bill is available online and can be accessed anytime using the link above.\n\n`;
+
+  if (billUrl) {
+    message += `*View Your Bill:*\n`;
+    message += `🔗 ${billUrl}\n\n`;
+    message += `For your convenience, your digital bill is available online and can be accessed anytime using the link above.\n\n`;
+  }
   
   if (customMessage) {
     message += `${customMessage}\n\n`;
