@@ -82,16 +82,32 @@ export const BillPage = () => {
       setLoading(true);
       logger.start('BILLING', 'FETCH', `Fetching bill data for: ${billId}`);
 
-      // Fetch invoice by id (UUID) — the WhatsApp bill link uses the invoice UUID
-      const { data: invoiceData, error: invoiceError } = await supabase
+      // Detect whether billId is a UUID or an invoice_number (e.g. INV-202606-XXXX)
+      // UUID v4 pattern: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(billId ?? '');
+
+      // Try primary lookup (UUID or invoice_number depending on format)
+      const primaryField = isUUID ? 'id' : 'invoice_number';
+      let { data: invoiceData, error: invoiceError } = await supabase
         .from('invoices')
         .select('*')
-        .eq('id', billId)
+        .eq(primaryField, billId)
         .maybeSingle();
+
+      // If UUID lookup returned nothing, try fallback via invoice_number
+      if (!invoiceData && !invoiceError && isUUID) {
+        const fallback = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('invoice_number', billId)
+          .maybeSingle();
+        invoiceData = fallback.data;
+        invoiceError = fallback.error;
+      }
 
       if (invoiceError) throw invoiceError;
       if (!invoiceData) {
-        setError('Bill not found');
+        setError('Bill not found. The link may be expired or invalid.');
         setLoading(false);
         return;
       }
