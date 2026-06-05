@@ -17,7 +17,7 @@ export const SuperAdminDashboard = () => {
       const { count, error } = await supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
-        .neq('role', 'SUPER_ADMIN');
+        .neq('role', 'superadmin');
         
       if (error) throw error;
       return count || 0;

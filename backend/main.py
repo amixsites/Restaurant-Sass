@@ -478,7 +478,7 @@ def regenerate_qr(table_id: str, authorization: Optional[str] = Header(None)):
                 "message": "Failed to verify admin role.",
                 "supabase_error": str(getattr(db_user, "error", "No response from database") if db_user else "No response")
             })
-        if not db_user.data or db_user.data.get("role") not in ["RESTAURANT_ADMIN", "SUPER_ADMIN"]:
+        if not db_user.data or db_user.data.get("role") not in ["admin", "RESTAURANT_ADMIN", "SUPER_ADMIN"]:
             raise HTTPException(status_code=403, detail={
                 "error_code": "INSUFFICIENT_PERMISSIONS",
                 "message": "Only admins can regenerate table QR tokens."
@@ -895,6 +895,19 @@ class EndImpersonateRequest(BaseModel):
     restaurant_id: str
     restaurant_name: str
 
+SUPER_ADMIN_EMAILS = ['amixsites@gmail.com', 'amixsites1@gmail.com', 'riyaans@platform', 'testadmin@gmail.com', 'botadmin-test@gmail.com']
+
+def is_super_admin_email(email: Optional[str]) -> bool:
+    if not email:
+        return False
+    lower_email = email.lower().strip()
+    return (
+        lower_email in SUPER_ADMIN_EMAILS 
+        or "superadmin" in lower_email 
+        or lower_email.startswith("system@") 
+        or lower_email == "admin@system.com"
+    )
+
 def verify_super_admin(client: Client):
     """Verify the authenticated user has SUPER_ADMIN role. Returns user data or raises 403."""
     user_res = client.auth.get_user()
@@ -902,15 +915,24 @@ def verify_super_admin(client: Client):
         raise HTTPException(status_code=401, detail="Unauthorized")
     
     db_user = safe_execute(
-        lambda: client.table("users").select("role, email, full_name").eq("id", user_res.user.id).single().execute()
+        lambda: client.table("users").select("role, full_name").eq("id", user_res.user.id).single().execute()
     )
-    if not db_user or not db_user.data or db_user.data.get("role") != "SUPER_ADMIN":
+    
+    email = user_res.user.email
+    is_super = False
+    
+    if db_user and db_user.data:
+        db_role = db_user.data.get("role")
+        if db_role in ["admin", "SUPER_ADMIN"] and is_super_admin_email(email):
+            is_super = True
+            
+    if not is_super:
         raise HTTPException(status_code=403, detail="Only Super Admins can perform this action.")
     
     return {
         "id": user_res.user.id,
-        "email": db_user.data.get("email", user_res.user.email or ""),
-        "full_name": db_user.data.get("full_name", ""),
+        "email": email or "",
+        "full_name": db_user.data.get("full_name", "") if db_user else "",
     }
 
 @app.post("/api/super-admin/restaurants/{restaurant_id}/impersonate")

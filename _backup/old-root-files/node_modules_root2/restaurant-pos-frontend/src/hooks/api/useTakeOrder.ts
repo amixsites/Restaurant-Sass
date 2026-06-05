@@ -33,6 +33,7 @@ export const useTakeOrder = () => {
           table_id: payload.tableId,
           waiter_id: user?.id || null,
           status: 'PENDING',
+          approval_status: 'APPROVED',
           total_amount: totalAmount,
           customer_phone: payload.customerPhone || null,
           notes: payload.customerName ? `Customer: ${payload.customerName}` : null
@@ -65,12 +66,12 @@ export const useTakeOrder = () => {
         throw itemsError;
       }
 
-      // 3. Update table status to OCCUPIED if it isn't already
+      // 3. Update table status to occupied if it isn't already
       const { error: tableError } = await supabase
         .from('tables')
-        .update({ status: 'OCCUPIED' })
+        .update({ status: 'occupied' })
         .eq('id', payload.tableId)
-        .eq('status', 'AVAILABLE'); // only update if it was available
+        .eq('status', 'available'); // only update if it was available
 
       if (tableError) {
         logger.warn('ORDERS', 'UPDATE_TABLE_STATUS_FAILED', tableError.message, tableError);

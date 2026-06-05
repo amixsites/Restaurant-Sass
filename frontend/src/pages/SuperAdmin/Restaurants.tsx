@@ -21,7 +21,7 @@ export const Restaurants = () => {
       const { data, error } = await supabase
         .from('users')
         .select('restaurant_id, full_name, email')
-        .eq('role', 'RESTAURANT_ADMIN');
+        .eq('role', 'admin');
 
       if (error) throw error;
 

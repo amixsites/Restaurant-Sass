@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useAnalytics } from '@/hooks/api/useAnalytics';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -14,7 +15,8 @@ import { cn } from '@/lib/utils';
 
 export const AdminDashboard = () => {
   const { user } = useAuthStore();
-  const { data: analytics, isLoading } = useAnalytics();
+  const [range, setRange] = useState('Weekly');
+  const { data: analytics, isLoading } = useAnalytics(range);
   const navigate = useNavigate();
 
   if (isLoading) {
@@ -34,8 +36,10 @@ export const AdminDashboard = () => {
     orders: 0,
   }));
 
+  const salesLabel = range === 'Daily' ? 'Today' : range === 'Weekly' ? 'Weekly' : 'Monthly';
+
   const stats = [
-    { label: "Today Sales", value: `₹${Number(analytics?.revenue.today || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, delta: analytics?.revenue.trend || "+0%", up: true, icon: IndianRupee, tint: "primary" },
+    { label: `${salesLabel} Sales`, value: `₹${Number(analytics?.revenue.total || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, delta: analytics?.revenue.trend || "+0%", up: true, icon: IndianRupee, tint: "primary" },
     { label: "Active Orders", value: String(analytics?.orders.active || 0), delta: `+${analytics?.orders.pending || 0} new`, up: true, icon: ChefHat, tint: "info" },
     { label: "Occupied Tables", value: `${analytics?.tables.occupied || 0}/${analytics?.tables.total || 0}`, delta: `${analytics?.tables.rate || 0}%`, up: true, icon: Grid3X3, tint: "success" },
     { label: "Preparing Orders", value: String(analytics?.orders.preparing || 0), delta: "kitchen", up: true, icon: Clock, tint: "warning" },
@@ -109,15 +113,21 @@ export const AdminDashboard = () => {
         <div className="xl:col-span-2 glass rounded-2xl p-5 shadow-card">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-semibold text-foreground">Revenue · Today</h3>
-              <p className="text-xs text-muted-foreground">Hourly sales vs. orders</p>
+              <h3 className="font-semibold text-foreground">Revenue · {salesLabel}</h3>
+              <p className="text-xs text-muted-foreground">Sales trend vs. orders</p>
             </div>
             <div className="flex gap-1 text-xs">
-              {["Today", "Week", "Month"].map((t, i) => (
-                <button key={t} className={cn(
-                  "px-3 py-1.5 rounded-lg font-medium",
-                  i === 0 ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent",
-                )}>{t}</button>
+              {["Daily", "Weekly", "Monthly"].map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRange(r)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg font-medium transition-all",
+                    range === r ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  {r === 'Daily' ? 'Today' : r === 'Weekly' ? 'Week' : 'Month'}
+                </button>
               ))}
             </div>
           </div>
@@ -158,13 +168,18 @@ export const AdminDashboard = () => {
               return (
                 <div key={it.name}>
                   <div className="flex justify-between text-sm">
-                    <span className="flex items-center gap-2 text-foreground font-medium">
-                      <span className="size-6 grid place-items-center text-[10px] font-semibold rounded-md bg-accent text-muted-foreground">
+                    <span className="flex items-center gap-2 text-foreground font-medium truncate max-w-[150px]">
+                      <span className="size-6 grid place-items-center text-[10px] font-semibold rounded-md bg-accent text-muted-foreground shrink-0">
                         #{i + 1}
                       </span>
                       {it.name}
                     </span>
-                    <span className="text-muted-foreground">{it.count}×</span>
+                    <div className="text-right">
+                      <span className="text-foreground font-semibold block">{it.count}×</span>
+                      {it.revenue > 0 && (
+                        <span className="text-muted-foreground text-[10px] block">₹{it.revenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                      )}
+                    </div>
                   </div>
                   <div className="h-1.5 mt-1.5 rounded-full bg-accent overflow-hidden">
                     <div

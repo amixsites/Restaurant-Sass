@@ -223,8 +223,8 @@ class RestaurantSimulator:
                 if not self.restaurants:
                     for r in existing_res.data:
                         # Find admin email
-                        users_res = client.table("users").select("email").eq("restaurant_id", r["id"]).eq("role", "RESTAURANT_ADMIN").execute()
-                        admin_email = users_res.data[0]["email"] if users_res.data else f"admin-{r['slug']}@test.com"
+                        users_res = client.table("users").select("full_name").eq("restaurant_id", r["id"]).eq("role", "admin").execute()
+                        admin_email = users_res.data[0]["full_name"] if users_res.data else f"admin-{r['slug']}@test.com"
                         
                         # Fetch initial stats
                         try:
@@ -511,6 +511,7 @@ class RestaurantSimulator:
             "restaurant_id": restaurant_id,
             "table_id": table["id"],
             "status": "PENDING",
+            "approval_status": "APPROVED",
             "total_amount": grand_total_with_tax,
             "customer_phone": cust_phone,
             "notes": f"[BOT] Customer: {cust_name}"

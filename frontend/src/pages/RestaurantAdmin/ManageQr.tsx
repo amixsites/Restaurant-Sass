@@ -19,7 +19,9 @@ import {
   Table as TableIcon
 } from 'lucide-react';
 import { logger } from '@/lib/logger';
-import { api, getAuthHeaders, fetchWithRetry } from '@/lib/api';
+import { buildTableMenuUrl } from '@/lib/urlBuilder';
+import { QRCodeCanvas } from 'qrcode.react';
+
 
 const ManageQr = () => {
   const { data: tables = [], isLoading } = useTables();
@@ -38,7 +40,7 @@ const ManageQr = () => {
       if (!restaurantId) return null;
       const { data, error } = await supabase
         .from('restaurants')
-        .select('name')
+        .select('name, slug')
         .eq('id', restaurantId)
         .single();
       if (error) throw error;
@@ -58,21 +60,17 @@ const ManageQr = () => {
   const handleGenerateQR = async (tableId: string) => {
     setTableLoading(tableId, true);
     try {
-      const headers = await getAuthHeaders();
-      const res = await fetchWithRetry(api.generateQR(tableId), { method: 'POST', headers });
-      let data;
-      try {
-        data = await res.json();
-      } catch (parseErr) {
-        throw new Error(`Server error (${res.status}): Failed to parse response.`);
-      }
-      if (res.ok && data.success) {
-        toast({ title: 'Success', description: 'QR code generated successfully.' });
-        await queryClient.invalidateQueries({ queryKey: ['tables', restaurantId] });
-        incrementRefreshKey(tableId);
-      } else {
-        toast({ title: 'Failed', description: (data && data.detail) || 'Could not generate QR Code', variant: 'destructive' });
-      }
+      const newToken = crypto.randomUUID();
+      const { error } = await supabase
+        .from('tables')
+        .update({ qr_token: newToken })
+        .eq('id', tableId);
+
+      if (error) throw error;
+
+      toast({ title: 'Success', description: 'QR code generated successfully.' });
+      await queryClient.invalidateQueries({ queryKey: ['tables', restaurantId] });
+      incrementRefreshKey(tableId);
     } catch (err: any) {
       logger.error('TABLES', 'QR_GEN_ERROR', err);
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -87,21 +85,17 @@ const ManageQr = () => {
     }
     setTableLoading(tableId, true);
     try {
-      const headers = await getAuthHeaders();
-      const res = await fetchWithRetry(api.regenerateQR(tableId), { method: 'POST', headers });
-      let data;
-      try {
-        data = await res.json();
-      } catch (parseErr) {
-        throw new Error(`Server error (${res.status}): Failed to parse response.`);
-      }
-      if (res.ok && data.success) {
-        toast({ title: 'Success', description: 'QR code regenerated successfully.' });
-        await queryClient.invalidateQueries({ queryKey: ['tables', restaurantId] });
-        incrementRefreshKey(tableId);
-      } else {
-        toast({ title: 'Failed', description: (data && data.detail) || 'Could not regenerate QR Code', variant: 'destructive' });
-      }
+      const newToken = crypto.randomUUID();
+      const { error } = await supabase
+        .from('tables')
+        .update({ qr_token: newToken })
+        .eq('id', tableId);
+
+      if (error) throw error;
+
+      toast({ title: 'Success', description: 'QR code regenerated successfully.' });
+      await queryClient.invalidateQueries({ queryKey: ['tables', restaurantId] });
+      incrementRefreshKey(tableId);
     } catch (err: any) {
       logger.error('TABLES', 'QR_REGEN_ERROR', err);
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -110,17 +104,103 @@ const ManageQr = () => {
     }
   };
 
-  const handleDownloadPNG = (tableId: string) => {
-    window.open(api.qrImage(tableId), '_blank');
-  };
-
-  const handleDownloadPDF = (tableId: string, tableNumber: string) => {
+  const handleDownloadPNG = (table: any) => {
+    const canvas = document.getElementById(`table-qr-canvas-${table.id}`) as HTMLCanvasElement;
+    if (!canvas) {
+      toast({ title: 'Error', description: 'QR Code preview not available.', variant: 'destructive' });
+      return;
+    }
+    const url = canvas.toDataURL('image/png');
     const link = document.createElement('a');
-    link.href = api.qrPdf(tableId);
-    link.download = `table_${tableNumber}_qr.pdf`;
+    link.href = url;
+    link.download = `${restaurant?.name || 'restaurant'}_table_${table.table_number}_qr.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleDownloadPDF = (table: any) => {
+    const canvas = document.getElementById(`table-qr-canvas-${table.id}`) as HTMLCanvasElement;
+    if (!canvas) {
+      toast({ title: 'Error', description: 'QR Code preview not available.', variant: 'destructive' });
+      return;
+    }
+    const qrDataUrl = canvas.toDataURL('image/png');
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: 'Error', description: 'Popup blocked. Please allow popups to download PDF.', variant: 'destructive' });
+      return;
+    }
+    
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${restaurant?.name || 'Restaurant'} - Table ${table.table_number}</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              text-align: center;
+              padding: 40px;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              box-sizing: border-box;
+              margin: 0;
+            }
+            .card {
+              border: 2px solid #e4e4e7;
+              border-radius: 32px;
+              padding: 48px;
+              width: 360px;
+              box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+              background: #ffffff;
+            }
+            h1 {
+              font-size: 28px;
+              font-weight: 800;
+              margin: 0 0 8px 0;
+              color: #18181b;
+            }
+            p {
+              font-size: 16px;
+              color: #71717a;
+              margin: 0 0 32px 0;
+              font-weight: 500;
+            }
+            img {
+              width: 240px;
+              height: 240px;
+              margin-bottom: 32px;
+            }
+            .instruction {
+              font-size: 14px;
+              font-weight: 700;
+              color: #f97316;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>${restaurant?.name || 'Restaurant'}</h1>
+            <p>Table ${table.table_number}</p>
+            <img src="${qrDataUrl}" />
+            <div class="instruction">Scan to View Menu & Order</div>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const handlePrintAll = () => {
@@ -226,9 +306,12 @@ const ManageQr = () => {
                   <div className="flex-1 flex flex-col items-center justify-center w-full space-y-4">
                     {/* Large QR Preview */}
                     <div className="relative size-44 bg-white rounded-2xl border p-3 flex justify-center items-center shadow-sm print:size-48 print:border-zinc-300">
-                      <img
-                        src={api.qrImage(tableId, refreshKey)}
-                        alt={`QR code for table ${table.table_number}`}
+                      <QRCodeCanvas
+                        id={`table-qr-canvas-${table.id}`}
+                        value={buildTableMenuUrl(restaurant?.slug || 'demo', table.table_number)}
+                        size={176}
+                        level="H"
+                        includeMargin={true}
                         className="w-full h-full object-contain"
                       />
                     </div>
@@ -243,14 +326,14 @@ const ManageQr = () => {
                       <div className="grid grid-cols-2 gap-2">
                         <Button
                           variant="outline"
-                          onClick={() => handleDownloadPNG(tableId)}
+                          onClick={() => handleDownloadPNG(table)}
                           className="rounded-xl h-10 text-xs font-bold transition-all border-zinc-200 flex items-center justify-center gap-1.5 hover:bg-muted"
                         >
                           <Download className="w-3.5 h-3.5" /> PNG
                         </Button>
                         <Button
                           variant="outline"
-                          onClick={() => handleDownloadPDF(tableId, table.table_number)}
+                          onClick={() => handleDownloadPDF(table)}
                           className="rounded-xl h-10 text-xs font-bold transition-all border-zinc-200 flex items-center justify-center gap-1.5 hover:bg-muted"
                         >
                           <FileDown className="w-3.5 h-3.5" /> PDF

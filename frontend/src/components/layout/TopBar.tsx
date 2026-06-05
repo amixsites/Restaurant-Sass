@@ -1,10 +1,11 @@
-import { Bell, Search, Menu as MenuIcon, ChevronDown, Sun, Moon } from "lucide-react";
+import { Bell, Search, Menu as MenuIcon, ChevronDown, Sun, Moon, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useTenantStore } from "@/store/tenantStore";
 import { useAuthStore } from "@/store/authStore";
 import { useImpersonationStore } from "@/store/impersonationStore";
+import { supabase } from "@/lib/supabase";
 
 export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
   const [now, setNow] = useState(() => new Date());
@@ -12,6 +13,8 @@ export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
   const { restaurantName } = useTenantStore();
   const { user, role } = useAuthStore();
   const { isImpersonating, impersonatedRestaurantName } = useImpersonationStore();
+
+  const signOut = async () => await supabase.auth.signOut();
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
@@ -74,6 +77,15 @@ export function TopBar({ onMobileMenu }: { onMobileMenu: () => void }) {
           </div>
           <ChevronDown className="size-4 text-muted-foreground hidden md:block" />
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={signOut}
+          className="rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+          title="Log Out"
+        >
+          <LogOut className="size-5" />
+        </Button>
       </div>
     </header>
   );

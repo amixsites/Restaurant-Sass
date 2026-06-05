@@ -79,7 +79,7 @@ function SuccessModal({ onNew, onView }: { onNew: () => void; onView: () => void
 }
 
 export const Cart = () => {
-  const { restaurantId: routeRestaurantId, tableId: routeTableId } = useParams();
+  const { restaurantId: routeRestaurantId, tableId: routeTableId, restaurantSlug, tableNumber: routeTableNumber } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -101,9 +101,14 @@ export const Cart = () => {
   const restaurantId = routeRestaurantId || storeRestaurantId;
   const tableId = routeTableId || storeTableId;
 
-  const getMenuPath = () => isSessionRoute 
-    ? (sessionId ? `/menu?session_id=${sessionId}` : '/menu') 
-    : `/m/${restaurantId}/${tableId}`;
+  const getMenuPath = () => {
+    if (restaurantSlug && routeTableNumber) {
+      return `/r/${restaurantSlug}/t/${routeTableNumber}`;
+    }
+    return isSessionRoute 
+      ? (sessionId ? `/menu?session_id=${sessionId}` : '/menu') 
+      : `/m/${restaurantId}/${tableId}`;
+  };
 
   const [showTax, setShowTax] = useState(true);
   const [placing, setPlacing] = useState(false);
@@ -114,75 +119,56 @@ export const Cart = () => {
   const grandTotal = subtotal + tax;
 
   const handlePlaceOrder = async () => {
-    if (items.length === 0 || !restaurantId || !tableId) return;
+    if (items.length === 0 || !restaurantId || !tableId) {
+      toast({ 
+        title: '❌ Order Submission Failed', 
+        description: 'Missing restaurant, table, or cart items.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
 
     setPlacing(true);
     try {
-      if (isSessionRoute && sessionId) {
-        // Place order securely via backend API
-        const payload = {
-          session_id: sessionId,
-          customer_name: customerName,
-          customer_phone: customerPhone,
-          items: items.map(item => ({
-            menu_item_id: item.menu_item_id,
-            quantity: item.quantity,
-            notes: item.notes || ''
-          }))
-        };
+      // 1. Create the order directly in Supabase
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert([{
+          restaurant_id: restaurantId,
+          table_id: tableId,
+          status: 'PENDING',
+          total_amount: grandTotal,
+          customer_phone: customerPhone || null,
+          notes: customerName ? `Customer: ${customerName}` : null
+        }])
+        .select()
+        .single();
 
-        const res = await fetchWithRetry(api.placeOrder(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+      if (orderError) throw orderError;
 
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.detail || 'Failed to place order.');
-        }
-      } else {
-        // Fallback: direct Supabase insert (for waiter/testing without tokens)
-        // 1. Create the order
-        const { data: order, error: orderError } = await supabase
-          .from('orders')
-          .insert([{
-            restaurant_id: restaurantId,
-            table_id: tableId,
-            status: 'PENDING',
-            total_amount: grandTotal,
-            customer_phone: customerPhone || null,
-            notes: customerName ? `Customer: ${customerName}` : null
-          }])
-          .select()
-          .single();
+      // 2. Create order items (verify correct column names: unit_price, total_price)
+      const orderItemsToInsert = items.map(item => ({
+        order_id: order.id,
+        menu_item_id: item.menu_item_id,
+        quantity: item.quantity,
+        unit_price: item.price,
+        total_price: item.price * item.quantity,
+        notes: item.notes || '',
+        status: 'PENDING'
+      }));
 
-        if (orderError) throw orderError;
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItemsToInsert);
 
-        // 2. Create order items (verify correct column names: unit_price, total_price)
-        const orderItemsToInsert = items.map(item => ({
-          order_id: order.id,
-          menu_item_id: item.menu_item_id,
-          quantity: item.quantity,
-          unit_price: item.price,
-          total_price: item.price * item.quantity,
-          notes: item.notes || '',
-          status: 'PENDING'
-        }));
+      if (itemsError) throw itemsError;
 
-        const { error: itemsError } = await supabase
-          .from('order_items')
-          .insert(orderItemsToInsert);
-
-        if (itemsError) throw itemsError;
-
-        // 3. Update table status to occupied
-        await supabase
-          .from('tables')
-          .update({ status: 'OCCUPIED' })
-          .eq('id', tableId)
-          .eq('status', 'AVAILABLE');
-      }
+      // 3. Update table status to occupied
+      await supabase
+        .from('tables')
+        .update({ status: 'occupied' })
+        .eq('id', tableId)
+        .eq('status', 'available');
 
       // Clear local cart
       clearCart();

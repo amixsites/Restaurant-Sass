@@ -103,7 +103,7 @@ function FloatingInput({
 }
 
 export const CustomerMenu = () => {
-  const { restaurantId: routeRestaurantId, tableId: routeTableId } = useParams();
+  const { restaurantId: routeRestaurantId, tableId: routeTableId, restaurantSlug, tableNumber: routeTableNumber } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -119,74 +119,177 @@ export const CustomerMenu = () => {
   const { items: cartItems, addItem, updateQuantity, customerName, customerPhone, setCustomerDetails } = useCartStore();
 
   const isSessionRoute = window.location.pathname.startsWith('/menu');
-  const getCartPath = () => isSessionRoute ? '/menu/cart' : `/m/${restaurantId}/${tableId}/cart`;
+  const getCartPath = () => {
+    if (restaurantSlug && routeTableNumber) {
+      return `/r/${restaurantSlug}/t/${routeTableNumber}/cart`;
+    }
+    return isSessionRoute ? '/menu/cart' : `/m/${restaurantId}/${tableId}/cart`;
+  };
 
-  // Fetch session details if session-based route
+  // Fetch session details / resolve slug
   useEffect(() => {
     const initSession = async () => {
-      const querySessionId = searchParams.get('session_id');
-      const storedSessionId = localStorage.getItem('dine_swift_session_id');
-      const activeSessionId = querySessionId || storedSessionId;
+      setIsSessionLoading(true);
+      setSessionError(null);
 
-      if (activeSessionId && !routeRestaurantId && !routeTableId) {
-        setIsSessionLoading(true);
-        setSessionError(null);
+      try {
+        if (restaurantSlug && routeTableNumber) {
+          // Case 3: Slug-based route (/r/:restaurantSlug/t/:tableNumber)
+          // 1. Resolve restaurant slug to ID
+          const { data: restData, error: restError } = await supabase
+            .from('restaurants')
+            .select('id, name')
+            .eq('slug', restaurantSlug)
+            .single();
 
-        // Show 'waking up' message after 2s if server is cold-starting
-        const wakeTimer = setTimeout(() => setIsWakingUp(true), 2000);
-
-        try {
-          const res = await fetchWithRetry(
-            api.session(activeSessionId),
-            {},
-            4,    // 4 retries: 1.5s → 3s → 6s → 12s
-            1500,
-          );
-          clearTimeout(wakeTimer);
-          setIsWakingUp(false);
-
-          if (res.ok) {
-            const sess = await res.json();
-            setRestaurantId(sess.restaurant_id);
-            setTableId(sess.table_id);
-            setRestaurantName(sess.restaurant_name);
-            setTableNumber(sess.table_number);
-            useCartStore.getState().setSessionDetails(activeSessionId, sess.restaurant_id, sess.table_id);
-            localStorage.setItem('dine_swift_session_id', activeSessionId);
-          } else {
-            const errData = await res.json().catch(() => ({}));
-            setSessionError(errData.detail || 'Invalid or expired session. Please scan table QR again.');
+          if (restError || !restData) {
+            throw new Error('Restaurant not found. Please verify the URL or scan the QR code again.');
           }
-        } catch (err: any) {
-          clearTimeout(wakeTimer);
-          setIsWakingUp(false);
-          setSessionError('Could not connect to server. Please check your connection and scan the QR code again.');
-        } finally {
-          setIsSessionLoading(false);
-        }
-      } else if (routeRestaurantId && routeTableId) {
-        setRestaurantId(routeRestaurantId);
-        setTableId(routeTableId);
-        
-        // Fetch restaurant details
-        const fetchRest = async () => {
-          const { data: restData } = await supabase.from('restaurants').select('name').eq('id', routeRestaurantId).single();
+
+          setRestaurantId(restData.id);
+          setRestaurantName(restData.name);
+
+          // 2. Resolve table number to ID
+          const { data: tableData, error: tableError } = await supabase
+            .from('tables')
+            .select('id, table_number')
+            .eq('restaurant_id', restData.id)
+            .eq('table_number', routeTableNumber)
+            .single();
+
+          if (tableError || !tableData) {
+            throw new Error(`Table ${routeTableNumber} not found for this restaurant.`);
+          }
+
+          setTableId(tableData.id);
+          setTableNumber(tableData.table_number);
+
+          // 3. Handle customer session
+          let activeSessionId = localStorage.getItem('dineflow_session_id');
+          let sessionValid = false;
+          if (activeSessionId) {
+            const { data: sessData } = await supabase
+              .from('customer_sessions')
+              .select('id')
+              .eq('session_id', activeSessionId)
+              .eq('restaurant_id', restData.id)
+              .eq('table_id', tableData.id)
+              .maybeSingle();
+            if (sessData) {
+              sessionValid = true;
+            }
+          }
+
+          if (!sessionValid) {
+            activeSessionId = crypto.randomUUID();
+            const { error: insertErr } = await supabase
+              .from('customer_sessions')
+              .insert([{
+                session_id: activeSessionId,
+                restaurant_id: restData.id,
+                table_id: tableData.id
+              }]);
+
+            if (insertErr) {
+              console.error('Session creation failed:', insertErr);
+            } else {
+              localStorage.setItem('dineflow_session_id', activeSessionId);
+            }
+          }
+
+          useCartStore.getState().setSessionDetails(activeSessionId || '', restData.id, tableData.id);
+
+        } else if (routeRestaurantId && routeTableId) {
+          // Case 2: UUID-based route (/m/:restaurantId/:tableId)
+          setRestaurantId(routeRestaurantId);
+          setTableId(routeTableId);
+
+          const { data: restData } = await supabase
+            .from('restaurants')
+            .select('name')
+            .eq('id', routeRestaurantId)
+            .single();
           if (restData?.name) setRestaurantName(restData.name);
-        };
-        fetchRest();
-        
-        // Fetch table details
-        const fetchTable = async () => {
-          const { data: tableData } = await supabase.from('tables').select('table_number').eq('id', routeTableId).single();
+
+          const { data: tableData } = await supabase
+            .from('tables')
+            .select('table_number')
+            .eq('id', routeTableId)
+            .single();
           if (tableData?.table_number) setTableNumber(tableData.table_number);
-        };
-        fetchTable();
-      } else {
-        setSessionError('No session found. Please scan a table QR code to view the menu.');
+
+          // Check/create customer session
+          let activeSessionId = localStorage.getItem('dineflow_session_id');
+          let sessionValid = false;
+          if (activeSessionId) {
+            const { data: sessData } = await supabase
+              .from('customer_sessions')
+              .select('id')
+              .eq('session_id', activeSessionId)
+              .eq('restaurant_id', routeRestaurantId)
+              .eq('table_id', routeTableId)
+              .maybeSingle();
+            if (sessData) sessionValid = true;
+          }
+          if (!sessionValid) {
+            activeSessionId = crypto.randomUUID();
+            await supabase.from('customer_sessions').insert([{
+              session_id: activeSessionId,
+              restaurant_id: routeRestaurantId,
+              table_id: routeTableId
+            }]);
+            localStorage.setItem('dineflow_session_id', activeSessionId);
+          }
+          useCartStore.getState().setSessionDetails(activeSessionId || '', routeRestaurantId, routeTableId);
+
+        } else if (window.location.pathname.startsWith('/menu')) {
+          // Case 1: Session route (/menu)
+          const querySessionId = searchParams.get('session_id');
+          const storedSessionId = localStorage.getItem('dineflow_session_id') || localStorage.getItem('dine_swift_session_id');
+          const activeSessionId = querySessionId || storedSessionId;
+
+          if (!activeSessionId) {
+            throw new Error('No active session found. Please scan the table QR code to view the menu.');
+          }
+
+          const { data: sess, error: sessErr } = await supabase
+            .from('customer_sessions')
+            .select(`
+              restaurant_id,
+              table_id,
+              restaurants ( name ),
+              tables ( table_number )
+            `)
+            .eq('session_id', activeSessionId)
+            .single();
+
+          if (sessErr || !sess) {
+            throw new Error('Invalid or expired session. Please scan your table QR code again.');
+          }
+
+          const rId = sess.restaurant_id;
+          const tId = sess.table_id;
+          const rName = (sess.restaurants as any)?.name || 'Restaurant';
+          const tNum = (sess.tables as any)?.table_number || '';
+
+          setRestaurantId(rId);
+          setTableId(tId);
+          setRestaurantName(rName);
+          setTableNumber(tNum);
+
+          useCartStore.getState().setSessionDetails(activeSessionId, rId, tId);
+          localStorage.setItem('dineflow_session_id', activeSessionId);
+        } else {
+          throw new Error('No routing details or session found. Please scan a table QR code.');
+        }
+      } catch (err: any) {
+        setSessionError(err.message || 'Failed to initialize session.');
+      } finally {
+        setIsSessionLoading(false);
       }
     };
     initSession();
-  }, [routeRestaurantId, routeTableId, searchParams]);
+  }, [routeRestaurantId, routeTableId, restaurantSlug, routeTableNumber, searchParams]);
 
   // Registration Form State
   const [name, setName] = useState(customerName);

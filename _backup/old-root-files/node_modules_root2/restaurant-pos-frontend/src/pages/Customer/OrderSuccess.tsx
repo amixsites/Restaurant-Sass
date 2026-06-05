@@ -5,7 +5,15 @@ import { MobileShell } from '@/components/MobileShell';
 
 export const OrderSuccess = () => {
   const navigate = useNavigate();
-  const { restaurantId, tableId } = useParams();
+  const { restaurantId, tableId, restaurantSlug, tableNumber } = useParams();
+
+  const handleBackToMenu = () => {
+    if (restaurantSlug && tableNumber) {
+      navigate(`/r/${restaurantSlug}/t/${tableNumber}`);
+    } else {
+      navigate(`/m/${restaurantId}/${tableId}`);
+    }
+  };
 
   return (
     <MobileShell>
@@ -49,7 +57,7 @@ export const OrderSuccess = () => {
           className="w-full max-w-xs mt-8 space-y-3"
         >
           <button 
-            onClick={() => navigate(`/m/${restaurantId}/${tableId}`)}
+            onClick={handleBackToMenu}
             className="w-full h-12 rounded-2xl bg-gradient-primary text-white font-bold text-sm shadow-glow tap-highlight-none hover:opacity-95 transition-all"
           >
             Back to Menu

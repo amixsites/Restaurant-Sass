@@ -45,7 +45,7 @@ export const TableManagement = () => {
         table_type: tableData.table_type,
         status: tableData.status,
         restaurant_id: restaurantId,
-        ...(generateQr && !tableData.id ? { qr_code_url: `https://restaurant-pos.app/qr/${restaurantId}/${tableData.table_number}` } : {})
+        ...(generateQr && !tableData.id ? { qr_token: crypto.randomUUID() } : {})
       };
 
       if (tableData.id) {

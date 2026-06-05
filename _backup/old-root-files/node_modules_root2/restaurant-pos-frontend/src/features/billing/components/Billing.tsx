@@ -497,6 +497,7 @@ export const Billing = () => {
         isOpen={isBillDrawerOpen}
         onOpenChange={setIsBillDrawerOpen}
         order={selectedOrder}
+        onComplete={() => setActiveTab('paid')}
       />
     </div>
   );

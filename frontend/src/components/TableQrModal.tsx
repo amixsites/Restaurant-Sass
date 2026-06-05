@@ -8,8 +8,10 @@ import { useAuthStore } from '@/store/authStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QrCode, Download, RefreshCw, Loader2, Table as TableIcon, FileDown, CheckCircle } from 'lucide-react';
 import { logger } from '@/lib/logger';
-import { api, getAuthHeaders, fetchWithRetry } from '@/lib/api';
+import { buildTableMenuUrl } from '@/lib/urlBuilder';
+import { QRCodeCanvas } from 'qrcode.react';
 import { PartialTable } from './AddTableDrawer';
+
 
 interface TableQrModalProps {
   isOpen: boolean;
@@ -38,7 +40,7 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({
       if (!restaurantId) return null;
       const { data, error } = await supabase
         .from('restaurants')
-        .select('name')
+        .select('name, slug')
         .eq('id', restaurantId)
         .single();
       if (error) throw error;
@@ -51,24 +53,25 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({
     if (!table?.id) return;
     setIsQrLoading(true);
     try {
-      const headers = await getAuthHeaders();
-      const res = await fetchWithRetry(api.generateQR(table.id), { method: 'POST', headers });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        toast({ title: 'Success', description: 'QR code generated successfully.' });
-        
-        // Force refresh table
-        if (table) {
-          table.qr_token = data.qr_token;
-        }
+      const newToken = crypto.randomUUID();
+      const { error } = await supabase
+        .from('tables')
+        .update({ qr_token: newToken })
+        .eq('id', table.id);
 
-        // Invalidate queries to update parent UI
-        await queryClient.invalidateQueries({ queryKey: ['tables', restaurantId] });
-        setQrRefreshKey(prev => prev + 1);
-        if (onUpdate) onUpdate();
-      } else {
-        toast({ title: 'Failed', description: data.detail || 'Could not generate QR Code', variant: 'destructive' });
+      if (error) throw error;
+
+      toast({ title: 'Success', description: 'QR code generated successfully.' });
+      
+      // Force refresh table
+      if (table) {
+        table.qr_token = newToken;
       }
+
+      // Invalidate queries to update parent UI
+      await queryClient.invalidateQueries({ queryKey: ['tables', restaurantId] });
+      setQrRefreshKey(prev => prev + 1);
+      if (onUpdate) onUpdate();
     } catch (err: any) {
       logger.error('TABLES', 'GENERATE_ERROR', err);
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -84,23 +87,24 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({
     }
     setIsQrLoading(true);
     try {
-      const headers = await getAuthHeaders();
-      const res = await fetchWithRetry(api.regenerateQR(table.id), { method: 'POST', headers });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        toast({ title: 'Success', description: 'QR code regenerated successfully.' });
-        
-        // Force refresh table
-        if (table) {
-          table.qr_token = data.qr_token;
-        }
+      const newToken = crypto.randomUUID();
+      const { error } = await supabase
+        .from('tables')
+        .update({ qr_token: newToken })
+        .eq('id', table.id);
 
-        await queryClient.invalidateQueries({ queryKey: ['tables', restaurantId] });
-        setQrRefreshKey(prev => prev + 1);
-        if (onUpdate) onUpdate();
-      } else {
-        toast({ title: 'Failed', description: data.detail || 'Could not regenerate QR Code', variant: 'destructive' });
+      if (error) throw error;
+
+      toast({ title: 'Success', description: 'QR code regenerated successfully.' });
+      
+      // Force refresh table
+      if (table) {
+        table.qr_token = newToken;
       }
+
+      await queryClient.invalidateQueries({ queryKey: ['tables', restaurantId] });
+      setQrRefreshKey(prev => prev + 1);
+      if (onUpdate) onUpdate();
     } catch (err: any) {
       logger.error('TABLES', 'REGENERATE_ERROR', err);
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -111,17 +115,103 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({
 
   const handleDownloadPNG = () => {
     if (!table?.id) return;
-    window.open(api.qrImage(table.id), '_blank');
+    const canvas = document.getElementById(`table-qr-canvas-${table.id}`) as HTMLCanvasElement;
+    if (!canvas) {
+      toast({ title: 'Error', description: 'QR Code preview not available.', variant: 'destructive' });
+      return;
+    }
+    const url = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${restaurant?.name || 'restaurant'}_table_${table.table_number}_qr.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleDownloadPDF = () => {
     if (!table?.id) return;
-    const link = document.createElement('a');
-    link.href = api.qrPdf(table.id);
-    link.download = `table_${table.table_number}_qr.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const canvas = document.getElementById(`table-qr-canvas-${table.id}`) as HTMLCanvasElement;
+    if (!canvas) {
+      toast({ title: 'Error', description: 'QR Code preview not available.', variant: 'destructive' });
+      return;
+    }
+    const qrDataUrl = canvas.toDataURL('image/png');
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: 'Error', description: 'Popup blocked. Please allow popups to download PDF.', variant: 'destructive' });
+      return;
+    }
+    
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${restaurant?.name || 'Restaurant'} - Table ${table.table_number}</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              text-align: center;
+              padding: 40px;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              box-sizing: border-box;
+              margin: 0;
+            }
+            .card {
+              border: 2px solid #e4e4e7;
+              border-radius: 32px;
+              padding: 48px;
+              width: 360px;
+              box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+              background: #ffffff;
+            }
+            h1 {
+              font-size: 28px;
+              font-weight: 800;
+              margin: 0 0 8px 0;
+              color: #18181b;
+            }
+            p {
+              font-size: 16px;
+              color: #71717a;
+              margin: 0 0 32px 0;
+              font-weight: 500;
+            }
+            img {
+              width: 240px;
+              height: 240px;
+              margin-bottom: 32px;
+            }
+            .instruction {
+              font-size: 14px;
+              font-weight: 700;
+              color: #f97316;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>${restaurant?.name || 'Restaurant'}</h1>
+            <p>Table ${table.table_number}</p>
+            <img src="${qrDataUrl}" />
+            <div class="instruction">Scan to View Menu & Order</div>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   if (!table) return null;
@@ -179,9 +269,12 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({
             <div className="space-y-6 flex flex-col items-center">
               {/* QR Large Preview Card */}
               <div className="relative size-48 bg-white rounded-2xl border shadow-sm p-4 flex justify-center items-center group overflow-hidden">
-                <img 
-                  src={api.qrImage(table.id, qrRefreshKey)}
-                  alt={`QR Code Table T-${table.table_number}`}
+                <QRCodeCanvas
+                  id={`table-qr-canvas-${table.id}`}
+                  value={buildTableMenuUrl(restaurant?.slug || 'demo', table.table_number)}
+                  size={192}
+                  level="H"
+                  includeMargin={true}
                   className="w-full h-full object-contain"
                 />
               </div>

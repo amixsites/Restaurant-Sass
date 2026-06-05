@@ -39,6 +39,23 @@ export const useKitchenActions = () => {
           logger.error('KITCHEN', 'SYNC_ITEM_STATUS', itemsError, 'Failed to sync order items status');
           throw itemsError;
         }
+
+        // Update table status to occupied when Kitchen starts preparation
+        if (status === 'PREPARING') {
+          // First fetch the table_id for this order
+          const { data: orderData, error: fetchError } = await supabase
+            .from('orders')
+            .select('table_id')
+            .eq('id', orderId)
+            .single();
+
+          if (!fetchError && orderData?.table_id) {
+            await supabase
+              .from('tables')
+              .update({ status: 'occupied' })
+              .eq('id', orderData.table_id);
+          }
+        }
       }
       
       logger.success('KITCHEN', 'UPDATE_ORDER_STATUS', `Order ${orderId} updated to ${status}`);

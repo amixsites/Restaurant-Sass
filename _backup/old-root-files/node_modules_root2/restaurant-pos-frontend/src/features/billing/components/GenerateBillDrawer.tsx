@@ -153,7 +153,7 @@ export const GenerateBillDrawer = ({
         discount_amount: discountAmount,
         total_amount: grandTotal,
         payment_method: paymentMethod.toUpperCase() as any,
-        payment_status: 'completed',
+        payment_status: 'paid',
       }]);
       if (invErr) throw invErr;
 
@@ -161,9 +161,10 @@ export const GenerateBillDrawer = ({
         .update({ status: 'COMPLETED' }).eq('id', order.id);
       if (ordErr) throw ordErr;
 
+      const tableNum = order.tables?.table_number || 'N/A';
       if (order.table_id) {
         await supabase.from('tables')
-          .update({ status: 'AVAILABLE', current_order_id: null })
+          .update({ status: 'available', current_order_id: null })
           .eq('id', order.table_id);
       }
 
@@ -180,10 +181,9 @@ export const GenerateBillDrawer = ({
       logger.success('BILLING', 'CHECKOUT', `Invoice ${invNum} saved`);
       toast({
         title: '✅ Payment Completed',
-        description: `Invoice ${invNum} generated. Table cleared.`,
+        description: `Invoice ${invNum} generated. Table T-${tableNum} cleared.`,
         className: 'bg-green-50 border-green-200 text-green-900',
       });
-      if (onComplete) onComplete();
     } catch (err: any) {
       logger.error('BILLING', 'CHECKOUT', err);
       toast({ title: 'Payment Failed', description: err.message, variant: 'destructive' });
@@ -208,7 +208,7 @@ export const GenerateBillDrawer = ({
 
       if (order.table_id) {
         await supabase.from('tables')
-          .update({ status: 'AVAILABLE', current_order_id: null })
+          .update({ status: 'available', current_order_id: null })
           .eq('id', order.table_id);
       }
 
@@ -296,10 +296,10 @@ export const GenerateBillDrawer = ({
             <p className="text-sm text-muted-foreground animate-pulse font-semibold">Generating tax invoice...</p>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+          <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
             
             {/* INVOICE SHEET PREVIEW PANEL */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-muted/20 custom-scrollbar flex justify-center no-print">
+            <div className="w-full lg:flex-1 lg:overflow-y-auto p-4 md:p-6 bg-muted/20 custom-scrollbar flex justify-center no-print">
               
               {/* DESKTOP/TABLET SCREEN INVOICE VIEW (Hidden on Mobile) */}
               <div className="hidden md:flex flex-col justify-between bg-white border border-zinc-200 shadow-md rounded-2xl text-black w-full max-w-xl p-8 min-h-[500px]">
@@ -678,37 +678,120 @@ export const GenerateBillDrawer = ({
 
               {/* Actions Section */}
               <div className="pt-6 border-t border-border/80 space-y-2">
-                {!paymentSuccess && !isAlreadyPaid && !isCancelled ? (
+                {paymentSuccess ? (
                   <div className="flex flex-col gap-2">
                     <Button
-                      className="w-full h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-black shadow-md transition-all active:scale-[0.98]"
+                      className="w-full h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-black shadow-md flex items-center justify-center gap-2"
+                      onClick={() => {
+                        const phone = order?.customer_phone || "";
+                        const cleanPhone = phone.replace(/\D/g, "");
+                        let waNumber = "";
+                        if (cleanPhone.length === 10) {
+                          waNumber = `91${cleanPhone}`;
+                        } else if (cleanPhone.length > 10) {
+                          waNumber = cleanPhone;
+                        }
+                        
+                        const waText = encodeURIComponent(`Hi, here is your bill for Table T-${order.tables?.table_number || "N/A"} from ${restaurantName}. Total Amount: ₹${grandTotal.toFixed(2)}.`);
+                        
+                        if (waNumber) {
+                          window.open(`https://wa.me/${waNumber}?text=${waText}`, '_blank');
+                        } else {
+                          toast({
+                            title: "WhatsApp Status",
+                            description: "No customer phone number registered for this order.",
+                            variant: "destructive",
+                          });
+                        }
+                        
+                        onOpenChange(false);
+                        if (onComplete) onComplete();
+                      }}
+                    >
+                      <svg className="w-5 h-5 fill-current mr-1.5" viewBox="0 0 24 24">
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.967C16.528 2.012 14.053.99 11.433.99c-5.437 0-9.862 4.37-9.866 9.8.001 1.968.517 3.888 1.498 5.607l-.979 3.57 3.674-.959z" />
+                      </svg>
+                      Send Bill on WhatsApp
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full h-11 rounded-xl font-bold text-xs"
+                      onClick={() => {
+                        onOpenChange(false);
+                        if (onComplete) onComplete();
+                      }}
+                    >
+                      Close & Go to Transaction History
+                    </Button>
+                  </div>
+                ) : !isAlreadyPaid && !isCancelled ? (
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      className="w-full h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-black shadow-md flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                       onClick={handleCompletePayment}
                       disabled={isProcessing}
                     >
-                      {isProcessing
-                        ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        : <CheckCircle2 className="w-4 h-4 mr-2" />}
-                      Collect & Settle (₹{grandTotal.toFixed(0)})
+                      {isProcessing ? (
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                      )}
+                      Complete Payment (₹{grandTotal.toFixed(0)})
                     </Button>
                     <Button variant="outline" className="w-full h-11 rounded-xl font-bold text-xs" onClick={handlePrint}>
                       <Printer className="w-4 h-4 mr-2 text-muted-foreground" /> Print Guest Bill
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 h-11 rounded-xl font-bold text-xs" onClick={handlePrint}>
-                      <Printer className="w-4 h-4 mr-1.5 text-muted-foreground" /> Print Invoice
-                    </Button>
-                    {isAlreadyPaid && !isCancelled && (
-                      <Button
-                        className="flex-1 h-11 rounded-xl font-bold bg-rose-600 hover:bg-rose-700 text-white text-xs"
-                        onClick={handleRefund}
-                        disabled={isProcessing}
-                      >
-                        {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <RefreshCcw className="w-4 h-4 mr-1.5" />}
-                        Void Invoice
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <Button variant="outline" className="flex-1 h-11 rounded-xl font-bold text-xs" onClick={handlePrint}>
+                        <Printer className="w-4 h-4 mr-1.5 text-muted-foreground" /> Print Invoice
                       </Button>
-                    )}
+                      {isAlreadyPaid && !isCancelled && (
+                        <Button
+                          className="flex-1 h-11 rounded-xl font-bold bg-rose-600 hover:bg-rose-700 text-white text-xs"
+                          onClick={handleRefund}
+                          disabled={isProcessing}
+                        >
+                          {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <RefreshCcw className="w-4 h-4 mr-1.5" />}
+                          Void Invoice
+                        </Button>
+                      )}
+                    </div>
+                    <Button
+                      className="w-full h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-black shadow-sm flex items-center justify-center gap-1.5"
+                      onClick={() => {
+                        const phone = order?.customer_phone || "";
+                        const cleanPhone = phone.replace(/\D/g, "");
+                        let waNumber = "";
+                        if (cleanPhone.length === 10) {
+                          waNumber = `91${cleanPhone}`;
+                        } else if (cleanPhone.length > 10) {
+                          waNumber = cleanPhone;
+                        }
+                        
+                        const waText = encodeURIComponent(`Hi, here is your bill for Table T-${order.tables?.table_number || "N/A"} from ${restaurantName}. Total Amount: ₹${grandTotal.toFixed(2)}.`);
+                        
+                        if (waNumber) {
+                          window.open(`https://wa.me/${waNumber}?text=${waText}`, '_blank');
+                        } else {
+                          toast({
+                            title: "WhatsApp Status",
+                            description: "No customer phone number registered for this order.",
+                            variant: "destructive",
+                          });
+                        }
+                        
+                        onOpenChange(false);
+                        if (onComplete) onComplete();
+                      }}
+                    >
+                      <svg className="w-4 h-4 fill-current mr-1" viewBox="0 0 24 24">
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.967C16.528 2.012 14.053.99 11.433.99c-5.437 0-9.862 4.37-9.866 9.8.001 1.968.517 3.888 1.498 5.607l-.979 3.57 3.674-.959z" />
+                      </svg>
+                      Send Bill on WhatsApp
+                    </Button>
                   </div>
                 )}
 

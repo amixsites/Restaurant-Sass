@@ -189,7 +189,7 @@ export const useOrders = () => {
         `)
         .eq('restaurant_id', restaurantId)
         .or('status.in.(PENDING,PREPARING,READY,SERVED),created_at.gte.' + new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false });
 
       if (error) {
         logger.error('ORDERS', 'FETCH', error, 'Failed to fetch orders');

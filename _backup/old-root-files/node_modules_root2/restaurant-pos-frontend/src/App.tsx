@@ -121,6 +121,12 @@ function App() {
                   <Route path="/expired" element={<SubscriptionExpired />} />
 
                   {/* ── Customer QR Menu ────────────────────────────── */}
+                  <Route path="/r/:restaurantSlug/t/:tableNumber" element={<CustomerLayout />}>
+                    <Route index element={<CustomerMenu />} />
+                    <Route path="cart"    element={<Cart />} />
+                    <Route path="success" element={<OrderSuccess />} />
+                  </Route>
+
                   <Route path="/m/:restaurantId/:tableId" element={<CustomerLayout />}>
                     <Route index element={<CustomerMenu />} />
                     <Route path="cart"    element={<Cart />} />

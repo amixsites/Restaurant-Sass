@@ -142,9 +142,9 @@ export const Cart = () => {
       // 3. Update table status to occupied
       await supabase
         .from('tables')
-        .update({ status: 'OCCUPIED' })
+        .update({ status: 'occupied' })
         .eq('id', tableId)
-        .eq('status', 'AVAILABLE');
+        .eq('status', 'available');
 
       // Clear local cart
       clearCart();

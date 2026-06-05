@@ -103,12 +103,25 @@ export const Billing = () => {
 
   const handleApproveOrder = async (orderId: string) => {
     try {
+      const { data: orderData, error: fetchError } = await supabase
+        .from('orders')
+        .select('table_id')
+        .eq('id', orderId)
+        .single();
+
       const { error } = await supabase
         .from('orders')
         .update({ approval_status: 'APPROVED' })
         .eq('id', orderId);
 
       if (error) throw error;
+
+      if (!fetchError && orderData?.table_id) {
+        await supabase
+          .from('tables')
+          .update({ status: 'occupied' })
+          .eq('id', orderData.table_id);
+      }
 
       toast({
         title: '✅ Order Approved',
@@ -678,6 +691,7 @@ export const Billing = () => {
         isOpen={isBillDrawerOpen}
         onOpenChange={setIsBillDrawerOpen}
         order={selectedOrder}
+        onComplete={() => setActiveTab('paid')}
       />
     </div>
   );

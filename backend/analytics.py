@@ -97,7 +97,7 @@ def calculate_analytics(supabase, restaurant_id: str, range_str: str = "Weekly")
         if not is_all:
             q_stf = q_stf.eq('restaurant_id', restaurant_id)
         else:
-            q_stf = q_stf.neq('role', 'SUPER_ADMIN')
+            q_stf = q_stf.not_.is_('restaurant_id', 'null')
             
         stf_res = q_stf.execute()
         staff_count = stf_res.count if stf_res.count else 0

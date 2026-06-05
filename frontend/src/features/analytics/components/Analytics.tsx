@@ -10,7 +10,7 @@ import {
 
 export const Analytics = () => {
   const [range, setRange] = useState('Weekly');
-  const { data: analytics, isLoading } = useAnalytics();
+  const { data: analytics, isLoading } = useAnalytics(range);
 
   const salesData = useMemo(() => {
     if (!analytics?.hourlyData) {
@@ -26,11 +26,7 @@ export const Analytics = () => {
   const topItems = useMemo(() => {
     if (!analytics?.topSelling?.length) {
       return [
-        { name: 'Mains', value: 42 },
-        { name: 'Starters', value: 22 },
-        { name: 'Breads/Rice', value: 18 },
-        { name: 'Beverages', value: 12 },
-        { name: 'Desserts', value: 6 },
+        { name: 'No items sold yet', value: 1 }
       ];
     }
     return analytics.topSelling.map((item) => ({
@@ -42,18 +38,19 @@ export const Analytics = () => {
   const colors = ['oklch(0.78 0.165 60)', 'oklch(0.72 0.13 230)', 'oklch(0.72 0.17 150)', 'oklch(0.82 0.16 85)', 'oklch(0.7 0.2 320)'];
 
   const stats = useMemo(() => {
-    const todayRevenue = analytics?.revenue.today || 0;
-    const activeOrders = analytics?.orders.active || 0;
-    const avgTicket = activeOrders > 0 ? Math.round(todayRevenue / activeOrders) : 0;
+    const totalRevenue = analytics?.revenue.total || 0;
+    const totalOrders = analytics?.orders.total || 0;
+    const averageOrderValue = analytics?.revenue.averageOrderValue || 0;
     const occupiedTables = analytics?.tables.occupied || 0;
     const totalTables = analytics?.tables.total || 0;
-    const occupancyRate = totalTables > 0 ? Math.round((occupiedTables / totalTables) * 100) : 0;
+    const completedOrders = analytics?.orders.completed || 0;
 
     return [
-      { label: 'Today Revenue', value: `₹${Number(todayRevenue).toLocaleString('en-IN')}`, delta: analytics?.revenue.trend || '+0.0%', up: true },
-      { label: 'Today Orders', value: String(analytics?.orders.active || 0), delta: '+12.4%', up: true },
-      { label: 'Avg Ticket Value', value: `₹${avgTicket || 386}`, delta: '+4.1%', up: true },
-      { label: 'Table Occupancy', value: `${occupancyRate}%`, delta: `${occupiedTables}/${totalTables} tables`, up: occupancyRate > 30 },
+      { label: 'Total Revenue', value: `₹${Number(totalRevenue).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, delta: analytics?.revenue.trend || '+0.0%', up: true },
+      { label: 'Total Orders', value: String(totalOrders), delta: 'orders', up: true },
+      { label: 'Average Order Value', value: `₹${Number(averageOrderValue).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, delta: 'average', up: true },
+      { label: 'Active Tables', value: `${occupiedTables}/${totalTables}`, delta: 'occupied', up: occupiedTables > 0 },
+      { label: 'Completed Orders', value: String(completedOrders), delta: 'completed', up: true },
     ];
   }, [analytics]);
 
@@ -92,7 +89,7 @@ export const Analytics = () => {
       />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {stats.map((s) => (
           <div key={s.label} className="glass rounded-2xl p-4 hover-lift shadow-card">
             <div className="text-xs text-muted-foreground">{s.label}</div>
@@ -112,7 +109,7 @@ export const Analytics = () => {
         {/* Revenue Trend Area Chart */}
         <div className="glass rounded-2xl p-5 xl:col-span-2 shadow-card">
           <h3 className="font-semibold mb-4 text-foreground">Revenue Trend</h3>
-          <div className="h-72">
+          <div className="h-72 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
@@ -139,29 +136,50 @@ export const Analytics = () => {
           </div>
         </div>
 
-        {/* Category Mix Pie Chart */}
-        <div className="glass rounded-2xl p-5 shadow-card">
-          <h3 className="font-semibold mb-4 text-foreground">Top Items / Category Mix</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={topItems} dataKey="value" nameKey="name" innerRadius={60} outerRadius={90} paddingAngle={3}>
-                  {topItems.map((_, i) => (
-                    <Cell key={i} fill={colors[i % colors.length]} stroke="none" />
-                  ))}
-                </Pie>
-                <Legend iconType="circle" wrapperStyle={{ fontSize: 11, color: "var(--foreground)" }} />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--card)",
-                    borderColor: "var(--border)",
-                    borderRadius: 12,
-                    fontSize: 12,
-                    color: "var(--foreground)"
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+        {/* Category Mix Pie Chart & Top Selling List */}
+        <div className="glass rounded-2xl p-5 shadow-card flex flex-col justify-between">
+          <div>
+            <h3 className="font-semibold mb-4 text-foreground">Top Items / Category Mix</h3>
+            <div className="h-72 w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={topItems} dataKey="value" nameKey="name" innerRadius={40} outerRadius={65} paddingAngle={3}>
+                    {topItems.map((_, i) => (
+                      <Cell key={i} fill={colors[i % colors.length]} stroke="none" />
+                    ))}
+                  </Pie>
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: 10, color: "var(--foreground)" }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--card)",
+                      borderColor: "var(--border)",
+                      borderRadius: 12,
+                      fontSize: 11,
+                      color: "var(--foreground)"
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="mt-4 border-t border-border pt-4 space-y-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Top Selling Details</h4>
+            {analytics?.topSelling?.length ? (
+              analytics.topSelling.map((it, idx) => (
+                <div key={it.name} className="flex justify-between items-center text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="size-5 rounded bg-primary/10 text-primary grid place-items-center font-bold text-[10px]">{idx + 1}</span>
+                    <span className="text-foreground font-medium truncate max-w-[120px]">{it.name}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-foreground font-semibold">{it.count} sold</span>
+                    <span className="text-muted-foreground block text-[10px]">₹{Number(it.revenue).toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-2">No transactions recorded yet.</p>
+            )}
           </div>
         </div>
       </div>
@@ -171,7 +189,7 @@ export const Analytics = () => {
         {/* Orders Bar Chart */}
         <div className="glass rounded-2xl p-5 xl:col-span-2 shadow-card">
           <h3 className="font-semibold mb-4 text-foreground">Orders by Time</h3>
-          <div className="h-56">
+          <div className="h-56 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={salesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -221,6 +239,61 @@ export const Analytics = () => {
               </Insight>
             </ul>
           </div>
+        </div>
+      </div>
+
+      {/* Recent Transactions Section */}
+      <div className="glass rounded-2xl p-5 shadow-card">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-semibold text-foreground">Recent Transactions</h3>
+            <p className="text-xs text-muted-foreground">Latest invoice payments settled</p>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs text-muted-foreground uppercase bg-muted/20 border-b border-border">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Invoice Number</th>
+                <th className="px-4 py-3 font-semibold">Date & Time</th>
+                <th className="px-4 py-3 font-semibold">Table</th>
+                <th className="px-4 py-3 font-semibold">Payment Method</th>
+                <th className="px-4 py-3 font-semibold">Amount</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/40">
+              {analytics?.recentTransactions?.length ? (
+                analytics.recentTransactions.map((tx) => (
+                  <tr key={tx.id} className="hover:bg-card/10 transition-colors">
+                    <td className="px-4 py-3 font-bold text-foreground font-mono">{tx.invoiceNumber}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {new Date(tx.createdAt).toLocaleString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </td>
+                    <td className="px-4 py-3 text-xs font-medium text-foreground">{tx.tableNumber}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground uppercase">{tx.paymentMethod}</td>
+                    <td className="px-4 py-3 font-semibold text-foreground">₹{tx.totalAmount.toLocaleString('en-IN')}</td>
+                    <td className="px-4 py-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-success/15 text-success border border-success/20">
+                        {tx.paymentStatus}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="text-center py-6 text-xs text-muted-foreground font-medium">
+                    No transactions recorded yet in this range.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

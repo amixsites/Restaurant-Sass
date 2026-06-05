@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
-  const { user, role, isLoading, isSubscriptionExpired } = useAuthStore();
+  const { user, role, isLoading, isSubscriptionExpired, session, restaurantId } = useAuthStore() as any;
   const { isImpersonating } = useImpersonationStore();
   const location = useLocation();
 
@@ -21,24 +21,52 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
     );
   }
 
+  console.log('[ProtectedRoute] Evaluating route access:', {
+    path: location.pathname,
+    hasUser: !!user,
+    userEmail: user?.email,
+    userRole: role,
+    restaurantId: restaurantId,
+    allowedRolesForRoute: allowedRoles,
+    isImpersonating: isImpersonating,
+    isSubscriptionExpired: isSubscriptionExpired
+  });
+
   if (!user) {
+    console.warn('[ProtectedRoute] Redirecting to /login: No authenticated user session.');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   // Handle subscription lockdown (Super Admin is completely bypassed)
   if (isSubscriptionExpired && role !== 'SUPER_ADMIN') {
+    console.warn('[ProtectedRoute] Redirecting to /expired: Subscription has expired for tenant restaurant.', {
+      restaurantId: restaurantId,
+      userRole: role
+    });
     return <Navigate to="/expired" replace />;
   }
 
   // Handle Role-based restrictions
   if (allowedRoles && role && !allowedRoles.includes(role)) {
+    console.warn('[ProtectedRoute] Redirecting to /unauthorized: Role validation failed.', {
+      userRole: role,
+      allowedRoles: allowedRoles,
+      reason: `User role "${role}" is not authorized for allowed roles: [${allowedRoles.join(', ')}] on route "${location.pathname}"`
+    });
     return <Navigate to="/unauthorized" replace />;
   }
 
   // If SUPER_ADMIN is accessing /admin/* routes, ensure they are impersonating
   if (role === 'SUPER_ADMIN' && location.pathname.startsWith('/admin') && !isImpersonating) {
+    console.log('[ProtectedRoute] Redirecting Super Admin to /super-admin control panel: Cannot access tenant routes directly without active impersonation.');
     return <Navigate to="/super-admin" replace />;
   }
+
+  console.log('[ProtectedRoute] Authorization Decision: ACCESS GRANTED.', {
+    userEmail: user.email,
+    role: role,
+    path: location.pathname
+  });
 
   return <>{children}</>;
 };

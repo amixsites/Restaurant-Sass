@@ -41,21 +41,30 @@ serve(async (req) => {
       .eq('id', caller.id)
       .single()
 
-    const callerRole = callerProfile?.role;
+    const callerRoleRaw = callerProfile?.role;
     const callerRestaurantId = callerProfile?.restaurant_id;
 
-    if (!callerRole) {
+    if (!callerRoleRaw) {
       throw new Error('Caller profile not found')
     }
 
+    const callerRole = callerRoleRaw.toUpperCase().trim();
+
     // 2. Parse request body
-    const { email, password, fullName, phone, role, restaurantId } = await req.json()
+    const body = await req.json()
+    const email = body.email;
+    const password = body.password;
+    const fullName = body.fullName || (body.metadata ? body.metadata.full_name : null) || body.email;
+    const phone = body.phone || (body.metadata ? body.metadata.phone : null) || '';
+    const role = body.role || (body.metadata ? body.metadata.role : null) || 'waiter';
+    const restaurantId = body.restaurantId || (body.metadata ? body.metadata.restaurant_id : null);
+
+    // Normalize incoming role for check
+    const roleUpper = role ? role.toUpperCase().trim() : '';
 
     // 3. Authorization Checks
-    // - SUPER_ADMIN can create any user (e.g., RESTAURANT_ADMINs for new tenants)
-    // - RESTAURANT_ADMIN can only create staff (WAITER, KITCHEN, MANAGER, CASHIER) for their OWN restaurant
-    if (callerRole !== 'SUPER_ADMIN') {
-      if (callerRole !== 'RESTAURANT_ADMIN') {
+    if (callerRole !== 'SUPER_ADMIN' && callerRole !== 'SUPERADMIN') {
+      if (callerRole !== 'RESTAURANT_ADMIN' && callerRole !== 'ADMIN') {
         throw new Error('Unauthorized: Only Admins can create users')
       }
       
@@ -63,9 +72,23 @@ serve(async (req) => {
         throw new Error('Unauthorized: Cannot create staff for a different restaurant')
       }
       
-      if (role === 'SUPER_ADMIN' || role === 'RESTAURANT_ADMIN') {
+      if (roleUpper === 'SUPER_ADMIN' || roleUpper === 'SUPERADMIN' || roleUpper === 'RESTAURANT_ADMIN' || roleUpper === 'ADMIN') {
         throw new Error('Unauthorized: Restaurant Admins cannot create Admin accounts')
       }
+    }
+
+    // Map role to DB enum: 'superadmin', 'admin', 'waiter', 'cashier', 'kitchen'
+    let dbRole = 'waiter';
+    if (roleUpper === 'SUPER_ADMIN' || roleUpper === 'SUPERADMIN') {
+      dbRole = 'superadmin';
+    } else if (roleUpper === 'RESTAURANT_ADMIN' || roleUpper === 'RESTAURANTADMIN' || roleUpper === 'ADMIN') {
+      dbRole = 'admin';
+    } else if (roleUpper === 'WAITER') {
+      dbRole = 'waiter';
+    } else if (roleUpper === 'CASHIER') {
+      dbRole = 'cashier';
+    } else if (roleUpper === 'KITCHEN') {
+      dbRole = 'kitchen';
     }
 
     // 4. Create the User in auth.users (Bypassing normal sign-up restrictions)
@@ -82,9 +105,6 @@ serve(async (req) => {
     const newUserId = authUser.user.id;
 
     // 5. Update the public.users table with the assigned role and tenant
-    // (Note: If you have a trigger `handle_new_user` on auth.users, it might have already created a blank row. 
-    // In that case, we UPSERT or UPDATE. Here we use UPDATE).
-    
     const { error: profileError } = await supabaseClient
       .from('users')
       .upsert({
@@ -92,7 +112,7 @@ serve(async (req) => {
         email: email,
         full_name: fullName,
         phone: phone,
-        role: role,
+        role: dbRole,
         restaurant_id: restaurantId,
         updated_at: new Date().toISOString()
       })
