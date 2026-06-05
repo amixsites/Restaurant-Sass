@@ -224,6 +224,109 @@ export function generateBillWhatsAppLink(
   return generateWhatsAppLink({ phoneNumber, message });
 }
 
+/**
+ * Send bill via WhatsApp (alias for generateBillWhatsAppLink)
+ * 
+ * This is the main function to use for complete WhatsApp bill sharing workflow.
+ * 
+ * @param phoneNumber - Customer's phone number (will be formatted automatically)
+ * @param billDetails - Bill and customer information
+ * @returns WhatsApp Click-to-Chat URL ready to open
+ * 
+ * @example
+ * const whatsappUrl = sendBillViaWhatsApp('9876543210', {
+ *   customerName: 'John Doe',
+ *   restaurantName: 'DineFlow Restaurant',
+ *   billId: 'INV-202606-1234',
+ *   billAmount: 1250,
+ *   visitDate: '2026-06-05',
+ *   tableNumber: 12
+ * });
+ * 
+ * window.open(whatsappUrl, '_blank');
+ */
+export function sendBillViaWhatsApp(
+  phoneNumber: string,
+  billDetails: BillDetails
+): string {
+  // Format phone number first
+  const formattedPhone = formatPhoneNumber(phoneNumber);
+  return generateBillWhatsAppLink(formattedPhone, billDetails);
+}
+
+/**
+ * Format and validate phone number for WhatsApp
+ * 
+ * Cleans phone number and adds country code if missing.
+ * 
+ * @param phoneNumber - Raw phone number input (any format)
+ * @param defaultCountryCode - Country code to add if missing (default: '91' for India)
+ * @returns Cleaned phone number with country code
+ * 
+ * @example
+ * formatPhoneNumber('9876543210')           // Returns: '919876543210'
+ * formatPhoneNumber('+91 98765 43210')      // Returns: '919876543210'
+ * formatPhoneNumber('091-98765-43210')      // Returns: '919876543210'
+ * formatPhoneNumber('1234567890', '1')      // Returns: '11234567890'
+ */
+export function formatPhoneNumber(
+  phoneNumber: string,
+  defaultCountryCode: string = '91'
+): string {
+  if (!phoneNumber) {
+    throw new Error('Phone number is required');
+  }
+
+  // Remove all non-digit characters
+  let cleaned = phoneNumber.replace(/\D/g, '');
+
+  // If phone number is empty after cleaning, throw error
+  if (cleaned.length === 0) {
+    throw new Error('Invalid phone number: no digits found');
+  }
+
+  // Remove leading zero if present (common in local formats)
+  if (cleaned.startsWith('0')) {
+    cleaned = cleaned.substring(1);
+  }
+
+  // If number doesn't start with country code, add it
+  if (!cleaned.startsWith(defaultCountryCode)) {
+    cleaned = defaultCountryCode + cleaned;
+  }
+
+  // Validate minimum length
+  if (cleaned.length < 10) {
+    throw new Error(`Invalid phone number: too short (${cleaned.length} digits)`);
+  }
+
+  return cleaned;
+}
+
+/**
+ * Generate a compact bill message for SMS or short notifications
+ * 
+ * @param billDetails - Bill information
+ * @returns Short message string
+ * 
+ * @example
+ * generateCompactBillMessage({
+ *   customerName: 'John',
+ *   restaurantName: 'DineFlow',
+ *   billId: 'INV-123',
+ *   billAmount: 1250,
+ *   visitDate: '2026-06-05'
+ * })
+ * // Returns: "Thank you for dining at DineFlow! Your bill of ₹1,250 is ready. View: https://dineinflowd.vercel.app/bill/INV-123"
+ */
+export function generateCompactBillMessage(billDetails: BillDetails): string {
+  const { restaurantName, billId, billAmount } = billDetails;
+  const billUrl = generateBillUrl(billId);
+  const formattedAmount = formatCurrency(billAmount);
+  
+  return `Thank you for dining at ${restaurantName}! Your bill of ${formattedAmount} is ready. View: ${billUrl}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Example Usage
 // ─────────────────────────────────────────────────────────────────────────────
