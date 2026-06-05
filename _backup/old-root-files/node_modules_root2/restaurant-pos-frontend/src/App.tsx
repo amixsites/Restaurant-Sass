@@ -37,6 +37,7 @@ const CustomerMenu        = lazy(() => import('@/pages/Customer/CustomerMenu').t
 const Cart                = lazy(() => import('@/pages/Customer/Cart').then(m => ({ default: m.Cart })));
 const OrderSuccess        = lazy(() => import('@/pages/Customer/OrderSuccess').then(m => ({ default: m.OrderSuccess })));
 const SubscriptionExpired = lazy(() => import('@/pages/SubscriptionExpired').then(m => ({ default: m.SubscriptionExpired })));
+const BillPage            = lazy(() => import('@/pages/Bill/BillPage').then(m => ({ default: m.BillPage })));
 // ─────────────────────────────────────────────────────────────────────────────
 
 const queryClient = new QueryClient({
@@ -84,6 +85,7 @@ function App() {
                     <Route path="billing"    element={<Billing />} />
                     <Route path="analytics"  element={<Analytics />} />
                     <Route path="staff"      element={<StaffManagement />} />
+                    <Route path="settings"   element={<Settings />} />
                     <Route path="take-order" element={<TakeOrder />} />
                   </Route>
 
@@ -119,6 +121,9 @@ function App() {
 
                   {/* ── Subscription Expired ────────────────────────── */}
                   <Route path="/expired" element={<SubscriptionExpired />} />
+
+                  {/* ── Digital Bill Page ───────────────────────────── */}
+                  <Route path="/bill/:billId" element={<BillPage />} />
 
                   {/* ── Customer QR Menu ────────────────────────────── */}
                   <Route path="/r/:restaurantSlug/t/:tableNumber" element={<CustomerLayout />}>

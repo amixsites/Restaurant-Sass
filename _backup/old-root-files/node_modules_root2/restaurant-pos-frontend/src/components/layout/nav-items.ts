@@ -12,6 +12,7 @@ import {
   PlusCircle,
   Flame,
   Shield,
+  Settings,
 } from "lucide-react";
 
 export const navItems = [
@@ -24,6 +25,7 @@ export const navItems = [
   { to: "/admin/menu", label: "Menu Management", icon: UtensilsCrossed },
   { to: "/admin/staff", label: "Staff Management", icon: Users },
   { to: "/admin/analytics", label: "Analytics", icon: LineChart },
+  { to: "/admin/settings", label: "Settings", icon: Settings },
 ] as const;
 
 export const superAdminNavItems = [
