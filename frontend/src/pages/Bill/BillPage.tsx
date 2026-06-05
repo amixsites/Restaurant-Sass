@@ -123,7 +123,7 @@ export const BillPage = () => {
           guest_count,
           status,
           created_at,
-          tables (table_number),
+          tables!orders_table_id_fkey (table_number),
           order_items (
             id,
             quantity,
