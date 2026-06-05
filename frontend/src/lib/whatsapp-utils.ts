@@ -37,7 +37,18 @@ export interface WhatsAppLinkOptions {
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BASE_BILL_URL = 'https://dineinflowd.vercel.app/bill';
+// Get base URL from environment variable or fallback to production URL
+const getBaseBillUrl = (): string => {
+  // Try Vite environment variable first
+  if (import.meta.env.VITE_PUBLIC_APP_URL) {
+    return `${import.meta.env.VITE_PUBLIC_APP_URL}/bill`;
+  }
+  
+  // Fallback to production URL
+  return 'https://dineinflowd.vercel.app/bill';
+};
+
+const BASE_BILL_URL = getBaseBillUrl();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Core Utilities

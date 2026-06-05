@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSettingsStore } from '@/store/settingsStore';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
+import { sendBillViaWhatsApp, formatPhoneNumber } from '@/lib/whatsapp-utils';
 
 interface GenerateBillDrawerProps {
   isOpen: boolean;
@@ -684,22 +685,48 @@ export const GenerateBillDrawer = ({
                       className="w-full h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-black shadow-md flex items-center justify-center gap-2"
                       onClick={() => {
                         const phone = order?.customer_phone || "";
-                        const cleanPhone = phone.replace(/\D/g, "");
-                        let waNumber = "";
-                        if (cleanPhone.length === 10) {
-                          waNumber = `91${cleanPhone}`;
-                        } else if (cleanPhone.length > 10) {
-                          waNumber = cleanPhone;
-                        }
                         
-                        const waText = encodeURIComponent(`Hi, here is your bill for Table T-${order.tables?.table_number || "N/A"} from ${restaurantName}. Total Amount: ₹${grandTotal.toFixed(2)}.`);
-                        
-                        if (waNumber) {
-                          window.open(`https://wa.me/${waNumber}?text=${waText}`, '_blank');
-                        } else {
+                        if (!phone) {
                           toast({
-                            title: "WhatsApp Status",
+                            title: "Phone Number Required",
                             description: "No customer phone number registered for this order.",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+
+                        try {
+                          // Format phone number
+                          const formattedPhone = formatPhoneNumber(phone);
+                          
+                          // Get customer name (fallback to "Valued Customer")
+                          const customerName = order?.customer_name || 
+                                             order?.customer_phone?.slice(-4) 
+                                             ? `Customer ${order.customer_phone.slice(-4)}`
+                                             : 'Valued Customer';
+                          
+                          // Generate professional WhatsApp message with bill link
+                          const whatsappUrl = sendBillViaWhatsApp(formattedPhone, {
+                            customerName: customerName,
+                            restaurantName: restaurantName,
+                            billId: invoice?.invoice_number || tempInvoiceNumber,
+                            billAmount: grandTotal,
+                            visitDate: invoice?.created_at || order.created_at,
+                            tableNumber: order.tables?.table_number,
+                          });
+                          
+                          // Open WhatsApp
+                          window.open(whatsappUrl, '_blank');
+                          
+                          toast({
+                            title: "✅ Bill Shared",
+                            description: `Professional bill sent to ${customerName} via WhatsApp with access link.`,
+                          });
+                        } catch (error: any) {
+                          console.error('WhatsApp error:', error);
+                          toast({
+                            title: "Error",
+                            description: error.message || "Failed to send bill via WhatsApp",
                             variant: "destructive",
                           });
                         }
@@ -763,22 +790,48 @@ export const GenerateBillDrawer = ({
                       className="w-full h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-black shadow-sm flex items-center justify-center gap-1.5"
                       onClick={() => {
                         const phone = order?.customer_phone || "";
-                        const cleanPhone = phone.replace(/\D/g, "");
-                        let waNumber = "";
-                        if (cleanPhone.length === 10) {
-                          waNumber = `91${cleanPhone}`;
-                        } else if (cleanPhone.length > 10) {
-                          waNumber = cleanPhone;
-                        }
                         
-                        const waText = encodeURIComponent(`Hi, here is your bill for Table T-${order.tables?.table_number || "N/A"} from ${restaurantName}. Total Amount: ₹${grandTotal.toFixed(2)}.`);
-                        
-                        if (waNumber) {
-                          window.open(`https://wa.me/${waNumber}?text=${waText}`, '_blank');
-                        } else {
+                        if (!phone) {
                           toast({
-                            title: "WhatsApp Status",
+                            title: "Phone Number Required",
                             description: "No customer phone number registered for this order.",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+
+                        try {
+                          // Format phone number
+                          const formattedPhone = formatPhoneNumber(phone);
+                          
+                          // Get customer name (fallback to "Valued Customer")
+                          const customerName = order?.customer_name || 
+                                             order?.customer_phone?.slice(-4) 
+                                             ? `Customer ${order.customer_phone.slice(-4)}`
+                                             : 'Valued Customer';
+                          
+                          // Generate professional WhatsApp message with bill link
+                          const whatsappUrl = sendBillViaWhatsApp(formattedPhone, {
+                            customerName: customerName,
+                            restaurantName: restaurantName,
+                            billId: invoice?.invoice_number || tempInvoiceNumber,
+                            billAmount: grandTotal,
+                            visitDate: invoice?.created_at || order.created_at,
+                            tableNumber: order.tables?.table_number,
+                          });
+                          
+                          // Open WhatsApp
+                          window.open(whatsappUrl, '_blank');
+                          
+                          toast({
+                            title: "✅ Bill Shared",
+                            description: `Professional bill sent to ${customerName} via WhatsApp with access link.`,
+                          });
+                        } catch (error: any) {
+                          console.error('WhatsApp error:', error);
+                          toast({
+                            title: "Error",
+                            description: error.message || "Failed to send bill via WhatsApp",
                             variant: "destructive",
                           });
                         }
