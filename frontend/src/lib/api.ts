@@ -2,10 +2,9 @@ import { supabase } from '@/lib/supabase';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SINGLE SOURCE OF TRUTH
-// ALL API calls go to Render. NEVER to Vercel. No exceptions.
-// Priority: VITE_API_URL env var → hardcoded Render URL → localhost (dev only)
+// Frontend operates entirely client-side via Supabase SDK.
+// Python backend is only used for local QA/E2E testing and simulation.
 // ─────────────────────────────────────────────────────────────────────────────
-const RENDER_BACKEND = 'https://dineinflow.onrender.com';
 
 function resolveApiBase(): string {
   const envUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
@@ -14,56 +13,31 @@ function resolveApiBase(): string {
     typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-  const isEnvLocalHost =
-    envUrl && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1') || envUrl.includes('192.168.'));
-
   if (envUrl && envUrl !== 'undefined' && envUrl !== 'null' && envUrl.trim() !== '') {
-    // If the site is running on localhost, or the env variable does not point to localhost, use envUrl
-    if (isLocalHostSite || !isEnvLocalHost) {
-      return envUrl;
-    }
+    return envUrl;
   }
 
-  // Fallback to Render production backend on any Vercel domain or external host
-  if (!isLocalHostSite) {
-    return RENDER_BACKEND;
+  // Fallback to local API proxy during localhost development for simulation control
+  if (isLocalHostSite) {
+    return ''; // dev → Vite proxy → localhost:8000
   }
 
-  if (import.meta.env.MODE === 'production') return RENDER_BACKEND;
-  return ''; // dev → Vite proxy → localhost:8000
+  return ''; // Production frontend doesn't query Python backend
 }
 
 export const API_BASE = resolveApiBase();
 
-/** @deprecated Use `api.*` typed methods instead. Only for one-off paths. */
+/** @deprecated Use direct Supabase queries instead. Left for backward-compatibility only. */
 export function getApiUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`;
   return API_BASE ? `${API_BASE}${p}` : p;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPED API ENDPOINT MAP
-// Use these everywhere. Never hardcode /api/... strings in components.
+// TYPED API ENDPOINT MAP (Local development & simulation only)
 // ─────────────────────────────────────────────────────────────────────────────
 export const api = {
-  // ── Sessions ──────────────────────────────────────────────────────────────
-  session:        (id: string)      => `${API_BASE}/api/session/${id}`,
-
-  // ── QR Code ───────────────────────────────────────────────────────────────
-  generateQR:     (tableId: string) => `${API_BASE}/api/tables/${tableId}/generate-qr`,
-  regenerateQR:   (tableId: string) => `${API_BASE}/api/tables/${tableId}/regenerate-qr`,
-  qrImage:        (tableId: string, bust = 0) =>
-                    `${API_BASE}/api/tables/${tableId}/qr-code-image${bust ? `?t=${bust}` : ''}`,
-  qrPdf:          (tableId: string) => `${API_BASE}/api/tables/${tableId}/qr-code-pdf`,
-
-  // ── Orders ────────────────────────────────────────────────────────────────
-  placeOrder:     ()                => `${API_BASE}/api/orders/place`,
-
-  // ── Analytics ─────────────────────────────────────────────────────────────
-  analytics:      (restaurantId: string, range = 'Weekly') =>
-                    `${API_BASE}/api/analytics/${restaurantId}?range=${range}`,
-
-  // ── Simulation ────────────────────────────────────────────────────────────
+  // ── Simulation (Super Admin testing tools on localhost only) ───────────────
   simStatus:      ()                => `${API_BASE}/api/simulation/status`,
   simStart:       ()                => `${API_BASE}/api/simulation/start`,
   simPause:       ()                => `${API_BASE}/api/simulation/pause`,
@@ -84,8 +58,7 @@ export async function getAuthHeaders(): Promise<{ Authorization: string }> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FETCH WITH RETRY — handles Render cold starts (503/504) and network blips
-// Usage: const res = await fetchWithRetry(api.session(id))
+// FETCH WITH RETRY
 // ─────────────────────────────────────────────────────────────────────────────
 export async function fetchWithRetry(
   url: string,
@@ -97,17 +70,7 @@ export async function fetchWithRetry(
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const res = await fetch(url, options);
-
-      // Retry on Render cold start (503) or gateway timeout (504)
-      if ((res.status === 503 || res.status === 504) && attempt < maxRetries - 1) {
-        const delay = baseDelayMs * Math.pow(2, attempt); // 800ms, 1.6s, 3.2s
-        console.warn(`[API] ${res.status} – retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(r => setTimeout(r, delay));
-        continue;
-      }
-
-      return res;
+      return await fetch(url, options);
     } catch (err: any) {
       lastError = err;
       if (attempt < maxRetries - 1) {
@@ -120,3 +83,4 @@ export async function fetchWithRetry(
 
   throw lastError ?? new Error('Backend unavailable after retries.');
 }
+

@@ -13,9 +13,10 @@ interface TableDetailsDrawerProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   table: PartialTable | null;
+  onDelete?: (tableId: string) => Promise<void>;
 }
 
-export const TableDetailsDrawer = ({ isOpen, onOpenChange, table }: TableDetailsDrawerProps) => {
+export const TableDetailsDrawer = ({ isOpen, onOpenChange, table, onDelete }: TableDetailsDrawerProps) => {
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -138,7 +139,21 @@ export const TableDetailsDrawer = ({ isOpen, onOpenChange, table }: TableDetails
               </div>
             </ScrollArea>
 
-            <DrawerFooter className="px-0 pt-4 border-t flex-col sm:flex-row gap-3">
+            <DrawerFooter className="px-0 pt-4 border-t flex flex-col sm:flex-row gap-3">
+              {onDelete && table.id && (
+                <Button 
+                  variant="destructive"
+                  className="h-14 rounded-xl text-base shadow-sm"
+                  onClick={async () => {
+                    if (window.confirm(`Are you sure you want to delete Table ${table.table_number}? This will also permanently delete its QR code.`)) {
+                      await onDelete(table.id);
+                      onOpenChange(false);
+                    }
+                  }}
+                >
+                  Delete Table
+                </Button>
+              )}
               {isOccupied && (
                 <Button 
                   className="flex-1 h-14 rounded-xl bg-blue-600 hover:bg-blue-700 text-base shadow-md"
@@ -151,7 +166,7 @@ export const TableDetailsDrawer = ({ isOpen, onOpenChange, table }: TableDetails
                 </Button>
               )}
               <DrawerClose asChild>
-                <Button variant="outline" className={`h-14 rounded-xl shadow-sm ${isOccupied ? 'flex-[0.5]' : 'w-full'}`}>
+                <Button variant="outline" className={`h-14 rounded-xl shadow-sm ${isOccupied ? 'flex-[0.5]' : 'flex-1'}`}>
                   Close
                 </Button>
               </DrawerClose>

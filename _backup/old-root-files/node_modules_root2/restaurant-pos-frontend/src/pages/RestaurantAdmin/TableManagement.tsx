@@ -33,7 +33,7 @@ export const TableManagement = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const handleSaveTable = async (tableData: any, generateQr: boolean) => {
+  const handleSaveTable = async (tableData: any) => {
     if (!restaurantId) return;
     logger.start('TABLES', 'SAVE_TABLE', `Saving table ${tableData.table_number}`, tableData);
 
@@ -45,7 +45,7 @@ export const TableManagement = () => {
         table_type: tableData.table_type,
         status: tableData.status,
         restaurant_id: restaurantId,
-        ...(generateQr && !tableData.id ? { qr_token: crypto.randomUUID() } : {})
+        ...(!tableData.id ? { qr_token: crypto.randomUUID() } : {})
       };
 
       if (tableData.id) {
@@ -94,6 +94,31 @@ export const TableManagement = () => {
       logger.error('TABLES', 'SAVE_TABLE_ERROR', err);
       toast({
         title: "Error Saving Table",
+        description: err.message || 'An unexpected error occurred.',
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteTable = async (tableId: string) => {
+    if (!restaurantId) return;
+    logger.start('TABLES', 'DELETE_TABLE', `Deleting table ${tableId}`);
+
+    try {
+      const { error } = await supabase.from('tables').delete().eq('id', tableId);
+
+      if (error) throw error;
+
+      await queryClient.invalidateQueries({ queryKey: ['tables', restaurantId] });
+      logger.success('TABLES', 'DELETE_TABLE_SUCCESS', 'Table deleted successfully');
+      toast({
+        title: "Success",
+        description: "Table deleted successfully.",
+      });
+    } catch (err: any) {
+      logger.error('TABLES', 'DELETE_TABLE_ERROR', err);
+      toast({
+        title: "Error Deleting Table",
         description: err.message || 'An unexpected error occurred.',
         variant: "destructive",
       });
@@ -272,6 +297,7 @@ export const TableManagement = () => {
         isOpen={isDetailsDrawerOpen}
         onOpenChange={setIsDetailsDrawerOpen}
         table={selectedTable}
+        onDelete={handleDeleteTable}
       />
     </div>
   );

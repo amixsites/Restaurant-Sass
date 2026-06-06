@@ -22,7 +22,7 @@ interface AddTableDrawerProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   tableToEdit?: PartialTable | null;
-  onSave: (table: PartialTable, generateQr: boolean) => Promise<void>;
+  onSave: (table: PartialTable) => Promise<void>;
 }
 
 export const AddTableDrawer = ({ isOpen, onOpenChange, tableToEdit, onSave }: AddTableDrawerProps) => {
@@ -33,7 +33,6 @@ export const AddTableDrawer = ({ isOpen, onOpenChange, tableToEdit, onSave }: Ad
     table_type: 'indoor',
     status: 'empty',
   });
-  const [generateQr, setGenerateQr] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -48,7 +47,6 @@ export const AddTableDrawer = ({ isOpen, onOpenChange, tableToEdit, onSave }: Ad
           status: tableToEdit.status || 'empty',
           qr_code_url: tableToEdit.qr_code_url,
         });
-        setGenerateQr(false); // Don't auto-regenerate on edit
       } else {
         setFormData({
           table_number: '',
@@ -57,7 +55,6 @@ export const AddTableDrawer = ({ isOpen, onOpenChange, tableToEdit, onSave }: Ad
           table_type: 'indoor',
           status: 'empty',
         });
-        setGenerateQr(true);
       }
     }
   }, [isOpen, tableToEdit]);
@@ -65,7 +62,7 @@ export const AddTableDrawer = ({ isOpen, onOpenChange, tableToEdit, onSave }: Ad
   const handleSave = async () => {
     try {
       setIsSubmitting(true);
-      await onSave(formData, generateQr);
+      await onSave(formData);
       onOpenChange(false);
     } catch (error) {
       console.error('Error saving table:', error);
@@ -151,19 +148,6 @@ export const AddTableDrawer = ({ isOpen, onOpenChange, tableToEdit, onSave }: Ad
               </Select>
             </div>
           </div>
-
-          {!tableToEdit && (
-            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-xl">
-              <div className="space-y-0.5">
-                <Label>Auto-generate QR Code</Label>
-                <p className="text-xs text-muted-foreground">Creates a QR for table ordering</p>
-              </div>
-              <Switch 
-                checked={generateQr}
-                onCheckedChange={setGenerateQr}
-              />
-            </div>
-          )}
         </div>
 
         <DrawerFooter className="px-0 pt-4 border-t">
