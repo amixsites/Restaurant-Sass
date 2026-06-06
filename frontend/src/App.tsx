@@ -142,6 +142,13 @@ function App() {
                     <Route index element={<CustomerMenu />} />
                     <Route path="cart"    element={<Cart />} />
                     <Route path="success" element={<OrderSuccess />} />
+                    <Route path=":qrToken" element={<CustomerMenu />} />
+                  </Route>
+
+                  <Route path="/order/:qrToken" element={<CustomerLayout />}>
+                    <Route index element={<CustomerMenu />} />
+                    <Route path="cart"    element={<Cart />} />
+                    <Route path="success" element={<OrderSuccess />} />
                   </Route>
 
                   {/* ── 403 Fallback ─────────────────────────────────── */}

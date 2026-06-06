@@ -5,10 +5,12 @@ import { MobileShell } from '@/components/MobileShell';
 
 export const OrderSuccess = () => {
   const navigate = useNavigate();
-  const { restaurantId, tableId, restaurantSlug, tableNumber } = useParams();
+  const { restaurantId, tableId, restaurantSlug, tableNumber, qrToken } = useParams();
 
   const handleBackToMenu = () => {
-    if (restaurantSlug && tableNumber) {
+    if (qrToken) {
+      navigate(window.location.pathname.startsWith('/order') ? `/order/${qrToken}` : `/menu/${qrToken}`);
+    } else if (restaurantSlug && tableNumber) {
       navigate(`/r/${restaurantSlug}/t/${tableNumber}`);
     } else {
       navigate(`/m/${restaurantId}/${tableId}`);

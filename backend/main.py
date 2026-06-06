@@ -523,9 +523,8 @@ def regenerate_qr(table_id: str, authorization: Optional[str] = Header(None)):
 
 @app.get("/order/{table_token}")
 def handle_qr_scan(table_token: str, request: Request):
-    # ─── RULE 4: Accept any t_<alphanum> token, don't be strict ─────────────
-    # Soft-validate: if it doesn't look like a token at all, reject; otherwise proceed.
-    if not table_token or not table_token.startswith("t_"):
+    # Accept any token format (including UUIDs) to ensure backwards compatibility with printed QR codes.
+    if not table_token:
         raise HTTPException(status_code=400, detail={
             "error_code": "INVALID_TOKEN",
             "message": "Invalid QR token format."

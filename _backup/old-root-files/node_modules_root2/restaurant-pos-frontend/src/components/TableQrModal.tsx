@@ -271,7 +271,7 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({
               <div className="relative size-48 bg-white rounded-2xl border shadow-sm p-4 flex justify-center items-center group overflow-hidden">
                 <QRCodeCanvas
                   id={`table-qr-canvas-${table.id}`}
-                  value={buildTableMenuUrl(restaurant?.slug || 'demo', table.table_number)}
+                  value={buildTableMenuUrl(table.qr_token || '')}
                   size={192}
                   level="H"
                   includeMargin={true}

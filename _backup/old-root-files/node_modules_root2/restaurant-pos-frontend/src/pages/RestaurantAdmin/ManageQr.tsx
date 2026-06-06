@@ -308,7 +308,7 @@ const ManageQr = () => {
                     <div className="relative size-44 bg-white rounded-2xl border p-3 flex justify-center items-center shadow-sm print:size-48 print:border-zinc-300">
                       <QRCodeCanvas
                         id={`table-qr-canvas-${table.id}`}
-                        value={buildTableMenuUrl(restaurant?.slug || 'demo', table.table_number)}
+                        value={buildTableMenuUrl(table.qr_token || '')}
                         size={176}
                         level="H"
                         includeMargin={true}

@@ -103,7 +103,7 @@ function FloatingInput({
 }
 
 export const CustomerMenu = () => {
-  const { restaurantId: routeRestaurantId, tableId: routeTableId, restaurantSlug, tableNumber: routeTableNumber } = useParams();
+  const { restaurantId: routeRestaurantId, tableId: routeTableId, restaurantSlug, tableNumber: routeTableNumber, qrToken } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -118,8 +118,11 @@ export const CustomerMenu = () => {
   const { data, isLoading: isMenuLoading } = useCustomerMenu(restaurantId);
   const { items: cartItems, addItem, updateQuantity, customerName, customerPhone, setCustomerDetails } = useCartStore();
 
-  const isSessionRoute = window.location.pathname.startsWith('/menu');
+  const isSessionRoute = window.location.pathname.startsWith('/menu') || window.location.pathname.startsWith('/order');
   const getCartPath = () => {
+    if (qrToken) {
+      return window.location.pathname.startsWith('/order') ? `/order/${qrToken}/cart` : `/menu/cart`;
+    }
     if (restaurantSlug && routeTableNumber) {
       return `/r/${restaurantSlug}/t/${routeTableNumber}/cart`;
     }
@@ -133,7 +136,70 @@ export const CustomerMenu = () => {
       setSessionError(null);
 
       try {
-        if (restaurantSlug && routeTableNumber) {
+        if (qrToken) {
+          // Resolve table by qrToken
+          // 1. Fetch table details
+          const { data: tableData, error: tableError } = await supabase
+            .from('tables')
+            .select('id, table_number, restaurant_id')
+            .eq('qr_token', qrToken)
+            .single();
+
+          if (tableError || !tableData) {
+            throw new Error('Table QR Code is invalid or has expired.');
+          }
+
+          // 2. Fetch restaurant details
+          const { data: restData, error: restError } = await supabase
+            .from('restaurants')
+            .select('id, name')
+            .eq('id', tableData.restaurant_id)
+            .single();
+
+          if (restError || !restData) {
+            throw new Error('Restaurant not found.');
+          }
+
+          setRestaurantId(restData.id);
+          setRestaurantName(restData.name);
+          setTableId(tableData.id);
+          setTableNumber(tableData.table_number);
+
+          // 3. Handle customer session
+          let activeSessionId = localStorage.getItem('dineflow_session_id');
+          let sessionValid = false;
+          if (activeSessionId) {
+            const { data: sessData } = await supabase
+              .from('customer_sessions')
+              .select('id')
+              .eq('session_id', activeSessionId)
+              .eq('restaurant_id', restData.id)
+              .eq('table_id', tableData.id)
+              .maybeSingle();
+            if (sessData) {
+              sessionValid = true;
+            }
+          }
+
+          if (!sessionValid) {
+            activeSessionId = crypto.randomUUID();
+            const { error: insertErr } = await supabase
+              .from('customer_sessions')
+              .insert([{
+                session_id: activeSessionId,
+                restaurant_id: restData.id,
+                table_id: tableData.id
+              }]);
+
+            if (insertErr) {
+              console.error('Session creation failed:', insertErr);
+            } else {
+              localStorage.setItem('dineflow_session_id', activeSessionId);
+            }
+          }
+
+          useCartStore.getState().setSessionDetails(activeSessionId || '', restData.id, tableData.id);
+        } else if (restaurantSlug && routeTableNumber) {
           // Case 3: Slug-based route (/r/:restaurantSlug/t/:tableNumber)
           // 1. Resolve restaurant slug to ID
           const { data: restData, error: restError } = await supabase

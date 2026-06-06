@@ -79,7 +79,7 @@ function SuccessModal({ onNew, onView }: { onNew: () => void; onView: () => void
 }
 
 export const Cart = () => {
-  const { restaurantId: routeRestaurantId, tableId: routeTableId, restaurantSlug, tableNumber: routeTableNumber } = useParams();
+  const { restaurantId: routeRestaurantId, tableId: routeTableId, restaurantSlug, tableNumber: routeTableNumber, qrToken } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -97,11 +97,14 @@ export const Cart = () => {
     total 
   } = useCartStore();
 
-  const isSessionRoute = window.location.pathname.startsWith('/menu');
+  const isSessionRoute = window.location.pathname.startsWith('/menu') || window.location.pathname.startsWith('/order');
   const restaurantId = routeRestaurantId || storeRestaurantId;
   const tableId = routeTableId || storeTableId;
 
   const getMenuPath = () => {
+    if (qrToken) {
+      return window.location.pathname.startsWith('/order') ? `/order/${qrToken}` : `/menu/${qrToken}`;
+    }
     if (restaurantSlug && routeTableNumber) {
       return `/r/${restaurantSlug}/t/${routeTableNumber}`;
     }
