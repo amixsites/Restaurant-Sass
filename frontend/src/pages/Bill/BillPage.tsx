@@ -29,7 +29,7 @@ interface Invoice {
 interface Order {
   id: string;
   customer_phone: string | null;
-  guest_count: number | null;
+  notes: string | null;
   status: string;
   created_at: string;
   tables?: {
@@ -115,7 +115,7 @@ export const BillPage = () => {
       // ── Step 2: Fetch Order (flat, no joins) ───────────────────────
       const { data: orderBase, error: orderError } = await supabase
         .from('orders')
-        .select('id, customer_phone, guest_count, status, created_at, table_id')
+        .select('id, customer_phone, notes, status, created_at, table_id')
         .eq('id', invoiceData.order_id)
         .single();
 
@@ -165,7 +165,7 @@ export const BillPage = () => {
       const assembledOrder: Order = {
         id: orderBase.id,
         customer_phone: orderBase.customer_phone,
-        guest_count: orderBase.guest_count,
+        notes: orderBase.notes,
         status: orderBase.status,
         created_at: orderBase.created_at,
         tables: tableData ? [tableData] : undefined,
@@ -450,10 +450,10 @@ export const BillPage = () => {
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider font-semibold">
                   <User className="size-3.5" />
-                  Guests
+                  Customer
                 </div>
                 <p className="text-sm font-bold text-foreground">
-                  {order.guest_count || 1}
+                  {order.notes ? order.notes.replace('Customer: ', '') : 'Walk-in Guest'}
                 </p>
               </div>
 
