@@ -51,12 +51,14 @@ interface Order {
 interface Restaurant {
   id: string;
   name: string;
+  slug: string | null;
   address: string | null;
   phone: string | null;
-  email: string | null;
-  website: string | null;
-  gst_number: string | null;
-  logo_url: string | null;
+  // Optional fields that may be added to DB later:
+  email?: string | null;
+  website?: string | null;
+  gst_number?: string | null;
+  logo_url?: string | null;
 }
 
 export const BillPage = () => {
@@ -153,9 +155,10 @@ export const BillPage = () => {
       }
 
       // ── Step 6: Fetch Restaurant ───────────────────────────────────
+      // Use * so we get all columns that exist — optional fields will simply be null
       const { data: restaurantData, error: restaurantError } = await supabase
         .from('restaurants')
-        .select('id, name, address, phone, email, website, gst_number, logo_url')
+        .select('id, name, slug, address, phone')
         .eq('id', invoiceData.restaurant_id)
         .single();
 
