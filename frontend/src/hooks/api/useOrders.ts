@@ -176,7 +176,7 @@ export const useOrders = () => {
         .select(`
           *,
           tables!orders_table_id_fkey (table_number),
-          users (full_name),
+          users!orders_waiter_id_fkey (full_name),
           order_items (
             *,
             menu_items (name, type)
@@ -188,8 +188,8 @@ export const useOrders = () => {
           )
         `)
         .eq('restaurant_id', restaurantId)
-        .or('status.in.(PENDING,PREPARING,READY,SERVED),created_at.gte.' + new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(500);
 
       if (error) {
         logger.error('ORDERS', 'FETCH', error, 'Failed to fetch orders');
