@@ -82,19 +82,18 @@ export const BillPage = () => {
       setLoading(true);
       logger.start('BILLING', 'FETCH', `Fetching bill data for: ${billId}`);
 
-      // Detect whether billId is a UUID or an invoice_number (e.g. INV-202606-XXXX)
-      // UUID v4 pattern: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+      // ── Step 1: Fetch Invoice ──────────────────────────────────────
+      // Detect UUID vs invoice_number format
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(billId ?? '');
-
-      // Try primary lookup (UUID or invoice_number depending on format)
       const primaryField = isUUID ? 'id' : 'invoice_number';
+
       let { data: invoiceData, error: invoiceError } = await supabase
         .from('invoices')
         .select('*')
         .eq(primaryField, billId)
         .maybeSingle();
 
-      // If UUID lookup returned nothing, try fallback via invoice_number
+      // Fallback: if UUID lookup returned nothing, try invoice_number
       if (!invoiceData && !invoiceError && isUUID) {
         const fallback = await supabase
           .from('invoices')
@@ -105,58 +104,94 @@ export const BillPage = () => {
         invoiceError = fallback.error;
       }
 
-      if (invoiceError) throw invoiceError;
+      if (invoiceError) throw new Error(`Invoice fetch failed: ${invoiceError.message}`);
       if (!invoiceData) {
         setError('Bill not found. The link may be expired or invalid.');
         setLoading(false);
         return;
       }
-
       setInvoice(invoiceData);
 
-      // Fetch order with items
-      const { data: orderData, error: orderError } = await supabase
+      // ── Step 2: Fetch Order (flat, no joins) ───────────────────────
+      const { data: orderBase, error: orderError } = await supabase
         .from('orders')
-        .select(`
-          id,
-          customer_phone,
-          guest_count,
-          status,
-          created_at,
-          tables!orders_table_id_fkey (table_number),
-          order_items (
-            id,
-            quantity,
-            unit_price,
-            total_price,
-            notes,
-            menu_items (name, description)
-          )
-        `)
+        .select('id, customer_phone, guest_count, status, created_at, table_id')
         .eq('id', invoiceData.order_id)
         .single();
 
-      if (orderError) throw orderError;
-      setOrder(orderData as any);
+      if (orderError) throw new Error(`Order fetch failed: ${orderError.message}`);
 
-      // Fetch restaurant details
+      // ── Step 3: Fetch Table (separate query, no ambiguity) ─────────
+      let tableData: { table_number: number } | null = null;
+      if (orderBase?.table_id) {
+        const { data: tbl } = await supabase
+          .from('tables')
+          .select('table_number')
+          .eq('id', orderBase.table_id)
+          .maybeSingle();
+        tableData = tbl;
+      }
+
+      // ── Step 4: Fetch Order Items (flat) ───────────────────────────
+      const { data: itemsRaw, error: itemsError } = await supabase
+        .from('order_items')
+        .select('id, quantity, unit_price, total_price, notes, menu_item_id')
+        .eq('order_id', invoiceData.order_id);
+
+      if (itemsError) throw new Error(`Order items fetch failed: ${itemsError.message}`);
+
+      // ── Step 5: Fetch Menu Item Names ──────────────────────────────
+      const menuItemIds = [...new Set((itemsRaw ?? []).map((i: any) => i.menu_item_id).filter(Boolean))];
+      let menuMap: Record<string, { name: string; description: string | null }> = {};
+
+      if (menuItemIds.length > 0) {
+        const { data: menuItems } = await supabase
+          .from('menu_items')
+          .select('id, name, description')
+          .in('id', menuItemIds);
+        (menuItems ?? []).forEach((m: any) => { menuMap[m.id] = m; });
+      }
+
+      // ── Step 6: Fetch Restaurant ───────────────────────────────────
       const { data: restaurantData, error: restaurantError } = await supabase
         .from('restaurants')
-        .select('*')
+        .select('id, name, address, phone, email, website, gst_number, logo_url')
         .eq('id', invoiceData.restaurant_id)
         .single();
 
-      if (restaurantError) throw restaurantError;
+      if (restaurantError) throw new Error(`Restaurant fetch failed: ${restaurantError.message}`);
+
+      // ── Assemble Order object ──────────────────────────────────────
+      const assembledOrder: Order = {
+        id: orderBase.id,
+        customer_phone: orderBase.customer_phone,
+        guest_count: orderBase.guest_count,
+        status: orderBase.status,
+        created_at: orderBase.created_at,
+        tables: tableData ? [tableData] : undefined,
+        order_items: (itemsRaw ?? []).map((item: any) => ({
+          id: item.id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: item.total_price,
+          notes: item.notes,
+          menu_items: menuMap[item.menu_item_id] ?? { name: 'Item', description: null },
+        })),
+      };
+
+      setOrder(assembledOrder);
       setRestaurant(restaurantData);
 
       logger.success('BILLING', 'FETCH', 'Bill data loaded successfully');
     } catch (err: any) {
       logger.error('BILLING', 'FETCH', err);
-      setError(err.message || 'Failed to load bill');
+      console.error('BillPage full error:', err);
+      setError(err.message || 'Failed to load bill. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
 
   const handlePrint = () => {
     window.print();
