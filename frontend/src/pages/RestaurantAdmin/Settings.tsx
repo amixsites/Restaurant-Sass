@@ -70,8 +70,13 @@ export const Settings = () => {
   }, [restaurant]);
 
   // Check if there are changes
+  const pGst = restaurant?.gst_config || DEFAULT_GST;
   const hasGSTChanges = restaurant && (
-    JSON.stringify(draftGST) !== JSON.stringify(restaurant.gst_config || DEFAULT_GST) ||
+    draftGST.enabled !== pGst.enabled ||
+    draftGST.useIGST !== pGst.useIGST ||
+    draftGST.cgst !== pGst.cgst ||
+    draftGST.sgst !== pGst.sgst ||
+    draftGST.igst !== pGst.igst ||
     draftGSTIN !== (restaurant.gstin || '')
   );
 
@@ -96,7 +101,16 @@ export const Settings = () => {
       
       // Verify persistence
       const persisted = data[0];
-      if (JSON.stringify(persisted.gst_config) !== JSON.stringify(gst_config) || persisted.gstin !== gstin) {
+      const pGst = persisted.gst_config || {};
+      const isValidGST = pGst.enabled === gst_config.enabled &&
+                         pGst.useIGST === gst_config.useIGST &&
+                         pGst.cgst === gst_config.cgst &&
+                         pGst.sgst === gst_config.sgst &&
+                         pGst.igst === gst_config.igst;
+      
+      const pGstin = persisted.gstin || '';
+      
+      if (!isValidGST || pGstin !== gstin) {
          throw new Error("Settings could not be verified. Please try again.");
       }
       return persisted;
