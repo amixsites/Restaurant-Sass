@@ -48,6 +48,7 @@ export const GenerateBillDrawer = ({
   const DEFAULT_GST = { enabled: true, cgst: 9, sgst: 9, igst: 18, useIGST: false };
   const gst = restaurant?.gst_config || DEFAULT_GST;
   const restaurantGSTIN = restaurant?.gstin || '';
+  const receiptPreference = restaurant?.receipt_preference || 'whatsapp';
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -673,7 +674,76 @@ export const GenerateBillDrawer = ({
                       <CheckCircle2 className="size-6" />
                     </div>
                     <p className="font-black text-sm text-foreground">Payment Received</p>
-                    <p className="text-xs text-muted-foreground">The table is cleared and set to available.</p>
+                    {['print', 'print_whatsapp'].includes(restaurant.receipt_preference) && (
+                      <Button
+                        className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-sm flex items-center justify-center gap-1.5"
+                        onClick={() => {
+                          handlePrint();
+                          onOpenChange(false);
+                          if (onComplete) onComplete();
+                        }}
+                      >
+                        <Printer className="w-5 h-5 mr-1.5" />
+                        Print Receipt
+                      </Button>
+                    )}
+                    {['whatsapp', 'print_whatsapp'].includes(restaurant.receipt_preference) && (
+                      <Button
+                        className="w-full h-11 rounded-xl bg-[#25D366] hover:bg-[#128C7E] text-white text-xs font-black shadow-sm flex items-center justify-center gap-1.5"
+                        onClick={() => {
+                          const phone = order?.customer_phone || "";
+                          
+                          if (!phone) {
+                            toast({
+                              title: "Phone Number Required",
+                              description: "No customer phone number registered for this order.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+  
+                          try {
+                            const formattedPhone = formatPhoneNumber(phone);
+                            const customerName = order?.customer_name
+                                               ? order.customer_name
+                                               : order?.customer_phone
+                                               ? `Customer ${order.customer_phone.slice(-4)}`
+                                               : 'Valued Customer';
+                            
+                            const whatsappUrl = sendBillViaWhatsApp(formattedPhone, {
+                              customerName: customerName,
+                              restaurantName: restaurantName,
+                              billId: invoice?.id || '',
+                              billAmount: grandTotal,
+                              visitDate: invoice?.created_at || order.created_at,
+                              tableNumber: order.tables?.table_number,
+                            });
+                            
+                            window.open(whatsappUrl, '_blank');
+                            
+                            toast({
+                              title: "✅ Bill Shared",
+                              description: `Professional bill sent to ${customerName} via WhatsApp with access link.`,
+                            });
+                          } catch (error: any) {
+                            console.error('WhatsApp error:', error);
+                            toast({
+                              title: "Error",
+                              description: error.message || "Failed to send bill via WhatsApp",
+                              variant: "destructive",
+                            });
+                          }
+                          
+                          onOpenChange(false);
+                          if (onComplete) onComplete();
+                        }}
+                      >
+                        <svg className="w-5 h-5 fill-current mr-1.5" viewBox="0 0 24 24">
+                          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.967C16.528 2.012 14.053.99 11.433.99c-5.437 0-9.862 4.37-9.866 9.8.001 1.968.517 3.888 1.498 5.607l-.979 3.57 3.674-.959z" />
+                        </svg>
+                        Send Bill on WhatsApp
+                      </Button>
+                    )}
                   </div>
                 )}
 
@@ -683,67 +753,6 @@ export const GenerateBillDrawer = ({
               <div className="pt-6 border-t border-border/80 space-y-2">
                 {paymentSuccess ? (
                   <div className="flex flex-col gap-2">
-                    <Button
-                      className="w-full h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-black shadow-md flex items-center justify-center gap-2"
-                      onClick={() => {
-                        const phone = order?.customer_phone || "";
-                        
-                        if (!phone) {
-                          toast({
-                            title: "Phone Number Required",
-                            description: "No customer phone number registered for this order.",
-                            variant: "destructive",
-                          });
-                          return;
-                        }
-
-                        try {
-                          // Format phone number
-                          const formattedPhone = formatPhoneNumber(phone);
-                          
-                          // Get customer name (fallback to "Valued Customer")
-                          const customerName = order?.customer_name
-                                             ? order.customer_name
-                                             : order?.customer_phone
-                                             ? `Customer ${order.customer_phone.slice(-4)}`
-                                             : 'Valued Customer';
-                          
-                          // Generate professional WhatsApp message with bill link
-                          // billId must be the invoice UUID (not invoice_number) so /bill/:id resolves
-                          const whatsappUrl = sendBillViaWhatsApp(formattedPhone, {
-                            customerName: customerName,
-                            restaurantName: restaurantName,
-                            billId: invoice?.id || '',
-                            billAmount: grandTotal,
-                            visitDate: invoice?.created_at || order.created_at,
-                            tableNumber: order.tables?.table_number,
-                          });
-                          
-                          // Open WhatsApp
-                          window.open(whatsappUrl, '_blank');
-                          
-                          toast({
-                            title: "✅ Bill Shared",
-                            description: `Professional bill sent to ${customerName} via WhatsApp with access link.`,
-                          });
-                        } catch (error: any) {
-                          console.error('WhatsApp error:', error);
-                          toast({
-                            title: "Error",
-                            description: error.message || "Failed to send bill via WhatsApp",
-                            variant: "destructive",
-                          });
-                        }
-                        
-                        onOpenChange(false);
-                        if (onComplete) onComplete();
-                      }}
-                    >
-                      <svg className="w-5 h-5 fill-current mr-1.5" viewBox="0 0 24 24">
-                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.967C16.528 2.012 14.053.99 11.433.99c-5.437 0-9.862 4.37-9.866 9.8.001 1.968.517 3.888 1.498 5.607l-.979 3.57 3.674-.959z" />
-                      </svg>
-                      Send Bill on WhatsApp
-                    </Button>
                     <Button
                       variant="outline"
                       className="w-full h-11 rounded-xl font-bold text-xs"
@@ -790,67 +799,76 @@ export const GenerateBillDrawer = ({
                         </Button>
                       )}
                     </div>
-                    <Button
-                      className="w-full h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-black shadow-sm flex items-center justify-center gap-1.5"
-                      onClick={() => {
-                        const phone = order?.customer_phone || "";
-                        
-                        if (!phone) {
-                          toast({
-                            title: "Phone Number Required",
-                            description: "No customer phone number registered for this order.",
-                            variant: "destructive",
-                          });
-                          return;
-                        }
-
-                        try {
-                          // Format phone number
-                          const formattedPhone = formatPhoneNumber(phone);
+                    {['print', 'print_whatsapp'].includes(restaurant.receipt_preference) && (
+                      <Button
+                        className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-sm flex items-center justify-center gap-1.5"
+                        onClick={() => {
+                          handlePrint();
+                          onOpenChange(false);
+                          if (onComplete) onComplete();
+                        }}
+                      >
+                        <Printer className="w-4 h-4 mr-1" />
+                        Print Receipt
+                      </Button>
+                    )}
+                    {['whatsapp', 'print_whatsapp'].includes(restaurant.receipt_preference) && (
+                      <Button
+                        className="w-full h-11 rounded-xl bg-[#25D366] hover:bg-[#128C7E] text-white text-xs font-black shadow-sm flex items-center justify-center gap-1.5"
+                        onClick={() => {
+                          const phone = order?.customer_phone || "";
                           
-                          // Get customer name (fallback to "Valued Customer")
-                          const customerName = order?.customer_name
-                                             ? order.customer_name
-                                             : order?.customer_phone
-                                             ? `Customer ${order.customer_phone.slice(-4)}`
-                                             : 'Valued Customer';
+                          if (!phone) {
+                            toast({
+                              title: "Phone Number Required",
+                              description: "No customer phone number registered for this order.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+  
+                          try {
+                            const formattedPhone = formatPhoneNumber(phone);
+                            const customerName = order?.customer_name
+                                               ? order.customer_name
+                                               : order?.customer_phone
+                                               ? `Customer ${order.customer_phone.slice(-4)}`
+                                               : 'Valued Customer';
+                            
+                            const whatsappUrl = sendBillViaWhatsApp(formattedPhone, {
+                              customerName: customerName,
+                              restaurantName: restaurantName,
+                              billId: invoice?.id || '',
+                              billAmount: grandTotal,
+                              visitDate: invoice?.created_at || order.created_at,
+                              tableNumber: order.tables?.table_number,
+                            });
+                            
+                            window.open(whatsappUrl, '_blank');
+                            
+                            toast({
+                              title: "✅ Bill Shared",
+                              description: `Professional bill sent to ${customerName} via WhatsApp with access link.`,
+                            });
+                          } catch (error: any) {
+                            console.error('WhatsApp error:', error);
+                            toast({
+                              title: "Error",
+                              description: error.message || "Failed to send bill via WhatsApp",
+                              variant: "destructive",
+                            });
+                          }
                           
-                          // Generate professional WhatsApp message with bill link
-                          // billId must be the invoice UUID (not invoice_number) so /bill/:id resolves
-                          const whatsappUrl = sendBillViaWhatsApp(formattedPhone, {
-                            customerName: customerName,
-                            restaurantName: restaurantName,
-                            billId: invoice?.id || '',
-                            billAmount: grandTotal,
-                            visitDate: invoice?.created_at || order.created_at,
-                            tableNumber: order.tables?.table_number,
-                          });
-                          
-                          // Open WhatsApp
-                          window.open(whatsappUrl, '_blank');
-                          
-                          toast({
-                            title: "✅ Bill Shared",
-                            description: `Professional bill sent to ${customerName} via WhatsApp with access link.`,
-                          });
-                        } catch (error: any) {
-                          console.error('WhatsApp error:', error);
-                          toast({
-                            title: "Error",
-                            description: error.message || "Failed to send bill via WhatsApp",
-                            variant: "destructive",
-                          });
-                        }
-                        
-                        onOpenChange(false);
-                        if (onComplete) onComplete();
-                      }}
-                    >
-                      <svg className="w-4 h-4 fill-current mr-1" viewBox="0 0 24 24">
-                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.967C16.528 2.012 14.053.99 11.433.99c-5.437 0-9.862 4.37-9.866 9.8.001 1.968.517 3.888 1.498 5.607l-.979 3.57 3.674-.959z" />
-                      </svg>
-                      Send Bill on WhatsApp
-                    </Button>
+                          onOpenChange(false);
+                          if (onComplete) onComplete();
+                        }}
+                      >
+                        <svg className="w-4 h-4 fill-current mr-1" viewBox="0 0 24 24">
+                          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.967C16.528 2.012 14.053.99 11.433.99c-5.437 0-9.862 4.37-9.866 9.8.001 1.968.517 3.888 1.498 5.607l-.979 3.57 3.674-.959z" />
+                        </svg>
+                        Send Bill on WhatsApp
+                      </Button>
+                    )}
                   </div>
                 )}
 

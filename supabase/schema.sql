@@ -17,6 +17,7 @@ CREATE TABLE restaurants (
     customer_info_mode VARCHAR(50) DEFAULT 'name_phone',
     gst_config JSONB DEFAULT '{"enabled": true, "cgst": 9, "sgst": 9, "igst": 18, "useIGST": false}'::jsonb,
     gstin VARCHAR(100) DEFAULT '',
+    receipt_preference VARCHAR(50) DEFAULT 'whatsapp',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
