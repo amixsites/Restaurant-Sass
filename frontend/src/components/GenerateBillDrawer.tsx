@@ -16,7 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
 import { useTenantStore } from '@/store/tenantStore';
 import { useToast } from '@/hooks/use-toast';
-import { useSettingsStore } from '@/store/settingsStore';
+
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import { sendBillViaWhatsApp, formatPhoneNumber } from '@/lib/whatsapp-utils';
@@ -44,8 +44,10 @@ export const GenerateBillDrawer = ({
   const { restaurantId: tenantRestaurantId } = useTenantStore();
   const restaurantId = authRestaurantId || tenantRestaurantId;
 
-  // Read GST config from settings store (persisted in localStorage)
-  const { gst, restaurantGSTIN } = useSettingsStore();
+  // Read GST config from backend
+  const DEFAULT_GST = { enabled: true, cgst: 9, sgst: 9, igst: 18, useIGST: false };
+  const gst = restaurant?.gst_config || DEFAULT_GST;
+  const restaurantGSTIN = restaurant?.gstin || '';
 
   const { toast } = useToast();
   const queryClient = useQueryClient();

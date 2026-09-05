@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useSettingsStore } from '@/store/settingsStore';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import {
   Settings2, Percent, RotateCcw, Save, Receipt,
-  BadgeIndianRupee, Info, CheckCircle2, FileText
+  BadgeIndianRupee, Info, CheckCircle2, FileText, Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -16,8 +15,15 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { useTenantStore } from '@/store/tenantStore';
 
+const DEFAULT_GST = {
+  enabled: true,
+  cgst: 9,
+  sgst: 9,
+  igst: 18,
+  useIGST: false,
+};
+
 export const Settings = () => {
-  const { gst, restaurantGSTIN, setGST, setGSTIN, resetGST } = useSettingsStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -26,10 +32,12 @@ export const Settings = () => {
   const restaurantId = authRestaurantId || tenantRestaurantId;
 
   // Local draft state — only commit on Save
-  const [draft, setDraft] = useState({ ...gst });
-  const [draftGSTIN, setDraftGSTIN] = useState(restaurantGSTIN);
-  const [saved, setSaved] = useState(false);
-  const [customerInfoMode, setCustomerInfoMode] = useState<string>('name_phone');
+  const [draftGST, setDraftGST] = useState({ ...DEFAULT_GST });
+  const [draftGSTIN, setDraftGSTIN] = useState('');
+  const [draftCustomerInfoMode, setDraftCustomerInfoMode] = useState<string>('name_phone');
+  
+  const [savedGST, setSavedGST] = useState(false);
+  const [savedCustomerInfo, setSavedCustomerInfo] = useState(false);
 
   // Fetch restaurant settings
   const { data: restaurant } = useQuery({
@@ -38,7 +46,7 @@ export const Settings = () => {
       if (!restaurantId) return null;
       const { data, error } = await supabase
         .from('restaurants')
-        .select('customer_info_mode')
+        .select('customer_info_mode, gst_config, gstin')
         .eq('id', restaurantId)
         .single();
       if (error) throw error;
@@ -48,12 +56,57 @@ export const Settings = () => {
   });
 
   useEffect(() => {
-    if (restaurant?.customer_info_mode) {
-      setCustomerInfoMode(restaurant.customer_info_mode);
+    if (restaurant) {
+      if (restaurant.customer_info_mode) {
+        setDraftCustomerInfoMode(restaurant.customer_info_mode);
+      }
+      if (restaurant.gst_config) {
+        setDraftGST({ ...DEFAULT_GST, ...restaurant.gst_config });
+      }
+      if (restaurant.gstin !== undefined && restaurant.gstin !== null) {
+        setDraftGSTIN(restaurant.gstin);
+      }
     }
   }, [restaurant]);
 
-  const updateSettingsMutation = useMutation({
+  // Check if there are changes
+  const hasGSTChanges = restaurant && (
+    JSON.stringify(draftGST) !== JSON.stringify(restaurant.gst_config || DEFAULT_GST) ||
+    draftGSTIN !== (restaurant.gstin || '')
+  );
+
+  const hasCustomerInfoChanges = restaurant && (
+    draftCustomerInfoMode !== (restaurant.customer_info_mode || 'name_phone')
+  );
+
+  const updateGSTMutation = useMutation({
+    mutationFn: async ({ gst_config, gstin }: { gst_config: any, gstin: string }) => {
+      if (!restaurantId) throw new Error("No restaurant ID found.");
+      
+      const { data, error } = await supabase
+        .from('restaurants')
+        .update({ gst_config, gstin })
+        .eq('id', restaurantId)
+        .select('gst_config, gstin');
+        
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Unable to save settings. You may not have permission to update this restaurant's settings.");
+      }
+      
+      // Verify persistence
+      const persisted = data[0];
+      if (JSON.stringify(persisted.gst_config) !== JSON.stringify(gst_config) || persisted.gstin !== gstin) {
+         throw new Error("Settings could not be verified. Please try again.");
+      }
+      return persisted;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['restaurant-settings', restaurantId] });
+    }
+  });
+
+  const updateCustomerInfoMutation = useMutation({
     mutationFn: async (mode: string) => {
       if (!restaurantId) throw new Error("No restaurant ID found.");
       
@@ -61,56 +114,79 @@ export const Settings = () => {
         .from('restaurants')
         .update({ customer_info_mode: mode })
         .eq('id', restaurantId)
-        .select();
+        .select('customer_info_mode');
         
       if (error) throw error;
       if (!data || data.length === 0) {
         throw new Error("Unable to save settings. You may not have permission to update this restaurant's settings.");
       }
-      return data[0];
+      
+      // Verify persistence
+      const persisted = data[0];
+      if (persisted.customer_info_mode !== mode) {
+         throw new Error("Settings could not be verified. Please try again.");
+      }
+      return persisted;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['restaurant-settings', restaurantId] });
     }
   });
 
-  const effectiveTax = draft.enabled
-    ? draft.useIGST
-      ? draft.igst
-      : draft.cgst + draft.sgst
+  const effectiveTax = draftGST.enabled
+    ? draftGST.useIGST
+      ? draftGST.igst
+      : draftGST.cgst + draftGST.sgst
     : 0;
 
-  const handleSave = async () => {
+  const handleSaveGST = async () => {
     try {
-      setGST(draft);
-      setGSTIN(draftGSTIN);
-
-      // Save customer info mode
-      if (restaurant?.customer_info_mode !== customerInfoMode) {
-        await updateSettingsMutation.mutateAsync(customerInfoMode);
-      }
-
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+      await updateGSTMutation.mutateAsync({ gst_config: draftGST, gstin: draftGSTIN });
+      
+      setSavedGST(true);
+      setTimeout(() => setSavedGST(false), 2500);
       toast({
         title: '✅ Settings Saved',
-        description: `Settings updated successfully.`,
+        description: `GST settings saved successfully.`,
       });
     } catch (err: any) {
-      console.error('Failed to save settings:', err);
+      console.error('Failed to save GST settings:', err);
       toast({
         title: '❌ Failed to save settings',
-        description: err.message || 'Unable to save settings. Please try again.',
+        description: err.message || 'Failed to save GST settings. Please try again.',
         variant: 'destructive',
       });
     }
   };
 
-  const handleReset = () => {
-    resetGST();
-    setDraft({ enabled: true, cgst: 9, sgst: 9, igst: 18, useIGST: false });
+  const handleSaveCustomerInfo = async () => {
+    try {
+      await updateCustomerInfoMutation.mutateAsync(draftCustomerInfoMode);
+      
+      setSavedCustomerInfo(true);
+      setTimeout(() => setSavedCustomerInfo(false), 2500);
+      toast({
+        title: '✅ Settings Saved',
+        description: `Customer information settings saved successfully.`,
+      });
+    } catch (err: any) {
+      console.error('Failed to save Customer Information settings:', err);
+      toast({
+        title: '❌ Failed to save settings',
+        description: err.message || 'Failed to save customer information settings. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleResetGST = () => {
+    setDraftGST({ enabled: true, cgst: 9, sgst: 9, igst: 18, useIGST: false });
     toast({ title: 'Reset to defaults', description: 'GST set back to CGST 9% + SGST 9%.' });
   };
+
+  // Safe fallback for UI rendering
+  const activeGST = restaurant?.gst_config || DEFAULT_GST;
+  const activeGSTIN = restaurant?.gstin || '';
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -142,12 +218,12 @@ export const Settings = () => {
               </p>
             </div>
             <Switch
-              checked={draft.enabled}
-              onCheckedChange={(v) => setDraft((d) => ({ ...d, enabled: v }))}
+              checked={draftGST.enabled}
+              onCheckedChange={(v) => setDraftGST((d) => ({ ...d, enabled: v }))}
             />
           </div>
 
-          {draft.enabled && (
+          {draftGST.enabled && (
             <>
               {/* CGST + SGST vs IGST toggle */}
               <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-4 py-3">
@@ -158,12 +234,12 @@ export const Settings = () => {
                   </p>
                 </div>
                 <Switch
-                  checked={draft.useIGST}
-                  onCheckedChange={(v) => setDraft((d) => ({ ...d, useIGST: v }))}
+                  checked={draftGST.useIGST}
+                  onCheckedChange={(v) => setDraftGST((d) => ({ ...d, useIGST: v }))}
                 />
               </div>
 
-              {draft.useIGST ? (
+              {draftGST.useIGST ? (
                 /* IGST single field */
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">IGST Rate (%)</Label>
@@ -174,9 +250,9 @@ export const Settings = () => {
                       min={0}
                       max={28}
                       step={0.5}
-                      value={draft.igst}
+                      value={draftGST.igst}
                       onChange={(e) =>
-                        setDraft((d) => ({
+                        setDraftGST((d) => ({
                           ...d,
                           igst: Math.min(28, Math.max(0, parseFloat(e.target.value) || 0)),
                         }))
@@ -200,9 +276,9 @@ export const Settings = () => {
                         min={0}
                         max={14}
                         step={0.5}
-                        value={draft.cgst}
+                        value={draftGST.cgst}
                         onChange={(e) =>
-                          setDraft((d) => ({
+                          setDraftGST((d) => ({
                             ...d,
                             cgst: Math.min(14, Math.max(0, parseFloat(e.target.value) || 0)),
                           }))
@@ -220,9 +296,9 @@ export const Settings = () => {
                         min={0}
                         max={14}
                         step={0.5}
-                        value={draft.sgst}
+                        value={draftGST.sgst}
                         onChange={(e) =>
-                          setDraft((d) => ({
+                          setDraftGST((d) => ({
                             ...d,
                             sgst: Math.min(14, Math.max(0, parseFloat(e.target.value) || 0)),
                           }))
@@ -243,20 +319,20 @@ export const Settings = () => {
                   <div className="flex justify-between text-muted-foreground">
                     <span>Subtotal</span><span>₹1,000.00</span>
                   </div>
-                  {draft.useIGST ? (
+                  {draftGST.useIGST ? (
                     <div className="flex justify-between text-muted-foreground">
-                      <span>IGST ({draft.igst}%)</span>
-                      <span>₹{(1000 * draft.igst / 100).toFixed(2)}</span>
+                      <span>IGST ({draftGST.igst}%)</span>
+                      <span>₹{(1000 * draftGST.igst / 100).toFixed(2)}</span>
                     </div>
                   ) : (
                     <>
                       <div className="flex justify-between text-muted-foreground">
-                        <span>CGST ({draft.cgst}%)</span>
-                        <span>₹{(1000 * draft.cgst / 100).toFixed(2)}</span>
+                        <span>CGST ({draftGST.cgst}%)</span>
+                        <span>₹{(1000 * draftGST.cgst / 100).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
-                        <span>SGST ({draft.sgst}%)</span>
-                        <span>₹{(1000 * draft.sgst / 100).toFixed(2)}</span>
+                        <span>SGST ({draftGST.sgst}%)</span>
+                        <span>₹{(1000 * draftGST.sgst / 100).toFixed(2)}</span>
                       </div>
                     </>
                   )}
@@ -295,22 +371,24 @@ export const Settings = () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleReset}
+            onClick={handleResetGST}
             className="text-muted-foreground hover:text-destructive gap-2"
           >
             <RotateCcw className="size-4" /> Reset to defaults
           </Button>
           <Button
-            onClick={handleSave}
-            disabled={updateSettingsMutation.isPending}
+            onClick={handleSaveGST}
+            disabled={updateGSTMutation.isPending || !hasGSTChanges}
             className={cn(
               'gap-2 h-11 px-6 rounded-xl font-bold transition-all',
-              saved
+              savedGST
                 ? 'bg-green-600 hover:bg-green-600 text-white'
                 : 'bg-primary text-primary-foreground'
             )}
           >
-            {saved ? (
+            {updateGSTMutation.isPending ? (
+              <><Loader2 className="size-4 animate-spin" /> Saving...</>
+            ) : savedGST ? (
               <><CheckCircle2 className="size-4" /> Saved!</>
             ) : (
               <><Save className="size-4" /> Save Settings</>
@@ -340,10 +418,10 @@ export const Settings = () => {
           ].map((option) => (
             <div 
               key={option.value}
-              onClick={() => setCustomerInfoMode(option.value)}
+              onClick={() => setDraftCustomerInfoMode(option.value)}
               className={cn(
                 "flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all",
-                customerInfoMode === option.value 
+                draftCustomerInfoMode === option.value 
                   ? "border-primary bg-primary/5" 
                   : "border-border bg-card hover:bg-muted/50"
               )}
@@ -354,14 +432,36 @@ export const Settings = () => {
               </div>
               <div className={cn(
                 "size-5 rounded-full border flex items-center justify-center",
-                customerInfoMode === option.value ? "border-primary" : "border-muted-foreground"
+                draftCustomerInfoMode === option.value ? "border-primary" : "border-muted-foreground"
               )}>
-                {customerInfoMode === option.value && (
+                {draftCustomerInfoMode === option.value && (
                   <div className="size-2.5 rounded-full bg-primary" />
                 )}
               </div>
             </div>
           ))}
+        </div>
+        
+        {/* Footer Actions */}
+        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-border bg-muted/10">
+          <Button
+            onClick={handleSaveCustomerInfo}
+            disabled={updateCustomerInfoMutation.isPending || !hasCustomerInfoChanges}
+            className={cn(
+              'gap-2 h-11 px-6 rounded-xl font-bold transition-all',
+              savedCustomerInfo
+                ? 'bg-green-600 hover:bg-green-600 text-white'
+                : 'bg-primary text-primary-foreground'
+            )}
+          >
+            {updateCustomerInfoMutation.isPending ? (
+              <><Loader2 className="size-4 animate-spin" /> Saving...</>
+            ) : savedCustomerInfo ? (
+              <><CheckCircle2 className="size-4" /> Saved!</>
+            ) : (
+              <><Save className="size-4" /> Save Settings</>
+            )}
+          </Button>
         </div>
       </div>
 
@@ -378,17 +478,17 @@ export const Settings = () => {
         </div>
         <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-4">
           {[
-            { label: 'GST Status', value: gst.enabled ? 'Enabled' : 'Disabled' },
-            { label: 'Tax Type', value: gst.useIGST ? 'IGST' : 'CGST + SGST' },
+            { label: 'GST Status', value: activeGST.enabled ? 'Enabled' : 'Disabled' },
+            { label: 'Tax Type', value: activeGST.useIGST ? 'IGST' : 'CGST + SGST' },
             {
               label: 'Total Tax Rate',
-              value: gst.enabled
-                ? `${gst.useIGST ? gst.igst : gst.cgst + gst.sgst}%`
+              value: activeGST.enabled
+                ? `${activeGST.useIGST ? activeGST.igst : activeGST.cgst + activeGST.sgst}%`
                 : '0%',
             },
-            { label: 'CGST', value: gst.enabled && !gst.useIGST ? `${gst.cgst}%` : '—' },
-            { label: 'SGST', value: gst.enabled && !gst.useIGST ? `${gst.sgst}%` : '—' },
-            { label: 'GSTIN', value: restaurantGSTIN || 'Not set' },
+            { label: 'CGST', value: activeGST.enabled && !activeGST.useIGST ? `${activeGST.cgst}%` : '—' },
+            { label: 'SGST', value: activeGST.enabled && !activeGST.useIGST ? `${activeGST.sgst}%` : '—' },
+            { label: 'GSTIN', value: activeGSTIN || 'Not set' },
           ].map((item) => (
             <div key={item.label} className="rounded-xl bg-muted/30 p-3">
               <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
