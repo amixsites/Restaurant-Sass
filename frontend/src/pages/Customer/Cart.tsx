@@ -113,13 +113,10 @@ export const Cart = () => {
       : `/m/${restaurantId}/${tableId}`;
   };
 
-  const [showTax, setShowTax] = useState(true);
   const [placing, setPlacing] = useState(false);
   const [success, setSuccess] = useState(false);
 
   const subtotal = useMemo(() => total(), [items]);
-  const tax = useMemo(() => (showTax ? Math.round(subtotal * 0.05) : 0), [subtotal, showTax]);
-  const grandTotal = subtotal + tax;
 
   const handlePlaceOrder = async () => {
     if (items.length === 0 || !restaurantId || !tableId) {
@@ -140,7 +137,7 @@ export const Cart = () => {
           restaurant_id: restaurantId,
           table_id: tableId,
           status: 'PENDING',
-          total_amount: grandTotal,
+          total_amount: subtotal,
           customer_phone: customerPhone || null,
           notes: customerName ? `Customer: ${customerName}` : null
         }])
@@ -324,26 +321,7 @@ export const Cart = () => {
           ))}
         </AnimatePresence>
 
-        {/* Bill Summary */}
-        <div className="bg-card rounded-2xl p-4 border border-border/60 shadow-card mt-4 space-y-2.5">
-          <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Bill Summary</div>
-          <Row label={`Subtotal (${items.reduce((s, i) => s + i.quantity, 0)} items)`} value={`₹${subtotal}`} />
-          
-          <div className="flex items-center justify-between text-sm">
-            <button onClick={() => setShowTax((v) => !v)} className="flex items-center gap-2 text-muted-foreground select-none">
-              <span className={`size-4 rounded border-2 grid place-items-center transition-colors ${showTax ? "bg-primary border-primary text-white" : "border-border"}`}>
-                {showTax && <Check className="size-3" strokeWidth={4} />}
-              </span>
-              Tax (5% GST)
-            </button>
-            <span className="font-bold text-foreground">₹{tax}</span>
-          </div>
-          
-          <div className="border-t border-dashed border-border pt-2.5 flex items-center justify-between">
-            <span className="font-extrabold text-foreground">Grand Total</span>
-            <span className="font-extrabold text-xl text-primary">₹{grandTotal}</span>
-          </div>
-        </div>
+
       </div>
 
       {/* Place Order CTA Button */}
@@ -360,7 +338,7 @@ export const Cart = () => {
               Sending to Kitchen…
             </>
           ) : (
-            <>Place Order · ₹{grandTotal}</>
+            <>Place Order</>
           )}
         </motion.button>
       </div>
