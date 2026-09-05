@@ -55,12 +55,19 @@ export const Settings = () => {
 
   const updateSettingsMutation = useMutation({
     mutationFn: async (mode: string) => {
-      if (!restaurantId) return;
-      const { error } = await supabase
+      if (!restaurantId) throw new Error("No restaurant ID found.");
+      
+      const { data, error } = await supabase
         .from('restaurants')
         .update({ customer_info_mode: mode })
-        .eq('id', restaurantId);
+        .eq('id', restaurantId)
+        .select();
+        
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Unable to save settings. You may not have permission to update this restaurant's settings.");
+      }
+      return data[0];
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['restaurant-settings', restaurantId] });
@@ -74,20 +81,29 @@ export const Settings = () => {
     : 0;
 
   const handleSave = async () => {
-    setGST(draft);
-    setGSTIN(draftGSTIN);
+    try {
+      setGST(draft);
+      setGSTIN(draftGSTIN);
 
-    // Save customer info mode
-    if (restaurant?.customer_info_mode !== customerInfoMode) {
-      await updateSettingsMutation.mutateAsync(customerInfoMode);
+      // Save customer info mode
+      if (restaurant?.customer_info_mode !== customerInfoMode) {
+        await updateSettingsMutation.mutateAsync(customerInfoMode);
+      }
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+      toast({
+        title: '✅ Settings Saved',
+        description: `Settings updated successfully.`,
+      });
+    } catch (err: any) {
+      console.error('Failed to save settings:', err);
+      toast({
+        title: '❌ Failed to save settings',
+        description: err.message || 'Unable to save settings. Please try again.',
+        variant: 'destructive',
+      });
     }
-
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-    toast({
-      title: '✅ Settings Saved',
-      description: `Settings updated successfully.`,
-    });
   };
 
   const handleReset = () => {

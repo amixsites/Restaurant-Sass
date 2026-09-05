@@ -93,6 +93,9 @@ ALTER TABLE customer_sessions ENABLE ROW LEVEL SECURITY;
 -- RESTAURANTS
 CREATE POLICY "Public select restaurants" ON restaurants FOR SELECT USING (true);
 CREATE POLICY "Super admin manage restaurants" ON restaurants FOR ALL USING (is_super_admin());
+CREATE POLICY "Restaurant admins can update their own restaurant" ON restaurants FOR UPDATE 
+  USING (is_restaurant_admin() AND id = get_auth_user_restaurant_id()) 
+  WITH CHECK (is_restaurant_admin() AND id = get_auth_user_restaurant_id());
 
 -- USERS (Staff Management)
 CREATE POLICY "Users select in same restaurant" ON users FOR SELECT 
