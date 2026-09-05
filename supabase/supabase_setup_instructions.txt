@@ -1,0 +1,27 @@
+=========================================================
+SUPABASE SETUP INSTRUCTIONS
+=========================================================
+
+1. Create a free account at https://supabase.com
+2. Create a new Project (name it "restaurant-os" or similar)
+3. Once the project is provisioned, go to Settings > API
+4. Copy your Project URL and anon/public key
+
+Update the .env file in the root of the project:
+VITE_SUPABASE_URL=your_project_url_here
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
+
+5. Go to the SQL Editor in your Supabase dashboard
+6. Click "New Query"
+7. Copy the entire contents of the `schema.sql` file in this folder
+8. Paste and click "Run" to create your tables and policies
+
+9. (Optional) Set up Authentication Provider:
+   Go to Authentication > Providers and ensure Email is enabled. Turn off "Confirm email" for testing purposes if you'd like.
+
+=========================================================
+WHATSAPP API INSTRUCTIONS
+=========================================================
+This app is built to use the Meta Cloud API for WhatsApp. Since credentials are not provided, the code uses a mock/abstracted service (`src/services/whatsappService.ts`) to log the invoices that *would* be sent to WhatsApp. You can later integrate your actual tokens in the .env file:
+VITE_WHATSAPP_PHONE_NUMBER_ID=...
+VITE_WHATSAPP_ACCESS_TOKEN=...

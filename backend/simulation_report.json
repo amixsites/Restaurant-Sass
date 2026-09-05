@@ -1,0 +1,96 @@
+{
+  "restaurants": [
+    {
+      "restaurant_id": "6fe0c546-e2c8-472b-a785-687050545de2",
+      "admin_id": "4590f282-2914-465d-898b-73a213a2b825",
+      "name": "BotRest - Spicy Kitchen 2",
+      "slug": "botrest-shop-2-837",
+      "email": "botadmin-restaurant-2@gmail.com",
+      "password": "password123",
+      "phone": "+91 9999900002",
+      "address": "261 Park Street, Food City"
+    },
+    {
+      "restaurant_id": "2ed2701c-5c5d-48ae-84b9-f89e897fb16c",
+      "admin_id": "7381b0dd-6d84-4de2-8886-d90fd94c8c8c",
+      "name": "BotRest - Spicy Hub 3",
+      "slug": "botrest-shop-3-28",
+      "email": "botadmin-restaurant-3@gmail.com",
+      "password": "password123",
+      "phone": "+91 9999900003",
+      "address": "267 Park Street, Food City"
+    },
+    {
+      "restaurant_id": "08e40d2f-19af-4db5-bd0a-3ddb1c4d19e2",
+      "admin_id": "531e334a-0e06-4d8d-95b8-5cc78b79166f",
+      "name": "BotRest - Tasty Plaza 4",
+      "slug": "botrest-shop-4-731",
+      "email": "botadmin-restaurant-4@gmail.com",
+      "password": "password123",
+      "phone": "+91 9999900004",
+      "address": "449 Park Street, Food City"
+    },
+    {
+      "restaurant_id": "2d884484-a673-400b-88c7-f1a60b3ddd6b",
+      "admin_id": "5927d839-323a-4c6d-8460-7ca2426f16b0",
+      "name": "BotRest - Spicy Palace 5",
+      "slug": "botrest-shop-5-200",
+      "email": "botadmin-restaurant-5@gmail.com",
+      "password": "password123",
+      "phone": "+91 9999900005",
+      "address": "210 Indiranagar, Food City"
+    },
+    {
+      "restaurant_id": "72ea98e7-2d7a-4432-9d85-12f762255fe4",
+      "admin_id": "97de9573-f3f3-49ee-8677-b586c6c73d90",
+      "name": "BotRest - Royal Palace 6",
+      "slug": "botrest-shop-6-685",
+      "email": "botadmin-restaurant-6@gmail.com",
+      "password": "password123",
+      "phone": "+91 9999900006",
+      "address": "13 Bandra West, Food City"
+    },
+    {
+      "restaurant_id": "e9f529d2-048f-46bb-9e80-052038b57567",
+      "admin_id": "e10de15b-df55-4207-aa2a-16f1d91f9fe2",
+      "name": "BotRest - Royal Plaza 7",
+      "slug": "botrest-shop-7-204",
+      "email": "botadmin-restaurant-7@gmail.com",
+      "password": "password123",
+      "phone": "+91 9999900007",
+      "address": "395 Bandra West, Food City"
+    },
+    {
+      "restaurant_id": "f229b081-ae62-4d7f-b1fa-db9392bb89b0",
+      "admin_id": "a2f91b8a-537b-4a79-aeeb-c3d35d570834",
+      "name": "BotRest - Crunchy Hub 8",
+      "slug": "botrest-shop-8-40",
+      "email": "botadmin-restaurant-8@gmail.com",
+      "password": "password123",
+      "phone": "+91 9999900008",
+      "address": "356 Bandra West, Food City"
+    },
+    {
+      "restaurant_id": "39d2543e-1005-4394-96e1-50fd29f80f1b",
+      "admin_id": "5ea666f1-28cf-4239-b004-5de47584f245",
+      "name": "BotRest - Gourmet Palace 9",
+      "slug": "botrest-shop-9-77",
+      "email": "botadmin-restaurant-9@gmail.com",
+      "password": "password123",
+      "phone": "+91 9999900009",
+      "address": "230 Bandra West, Food City"
+    },
+    {
+      "restaurant_id": "b63acd67-2927-4c77-99d5-6b14d068217f",
+      "admin_id": "4ba11e39-0b99-43ed-8e2c-2fdf60aa15fc",
+      "name": "BotRest - Royal Kitchen 10",
+      "slug": "botrest-shop-10-623",
+      "email": "botadmin-restaurant-10@gmail.com",
+      "password": "password123",
+      "phone": "+91 9999900010",
+      "address": "347 Indiranagar, Food City"
+    }
+  ],
+  "generated_at": "2026-05-29T21:29:30.883506",
+  "total_count": 9
+}
